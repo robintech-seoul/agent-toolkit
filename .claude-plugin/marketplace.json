@@ -1,0 +1,15 @@
+{
+  "name": "robintech",
+  "owner": {
+    "name": "RobinTech",
+    "url": "https://github.com/robintech-seoul"
+  },
+  "description": "RobinTech agent toolkit — engineering skills and product tooling for coding agents.",
+  "plugins": [
+    {
+      "name": "arch-explorer",
+      "source": "./claude/skills/arch-explorer",
+      "description": "Build an interactive, recursively drillable architecture map of a codebase as a single self-contained HTML file — boxes are modules, labeled arrows are the interfaces between them, and every arrow expands to full signatures with source locations."
+    }
+  ]
+}
