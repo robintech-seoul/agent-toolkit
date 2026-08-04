@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ko" data-guide-lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robin-Cloud 온보딩 가이드</title>
+<meta name="description" content="robin-cloud-onboarding 플러그인으로 내 프로젝트를 Robin-Cloud에 온보딩하기 — 에이전트가 repo를 읽어 배포 파일을 만들고, 콘솔을 안내하고, 배포한 뒤 로그로 검증·수정합니다.">
+<script>
+  // FOUC 방지: 렌더 전에 저장된 언어를 반영 (기본 ko)
+  (function(){ try {
+    var l = localStorage.getItem('robin-guide-lang');
+    var lang = (l === 'en') ? 'en' : 'ko';
+    var r = document.documentElement;
+    r.setAttribute('data-guide-lang', lang); r.setAttribute('lang', lang);
+  } catch (e) {} })();
+</script>
+<style>
+  :root {
+    --sky:#f5f6f8; --surface:#ffffff; --raised:#fbfcfd; --ink:#171b23;
+    --muted:#5b6474; --faint:#8b94a4; --line:#e3e6ec;
+    --robin:#db4a22; --robin-deep:#b83c18; --robin-tint:#fcefe9; --code-bg:#f1f3f6;
+    --radius:12px; --measure:64ch;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --sky:#0e131c; --surface:#141a25; --raised:#19202d; --ink:#e8ebf1;
+      --muted:#97a1b3; --faint:#6b7688; --line:#26303f;
+      --robin:#f26a44; --robin-deep:#db4a22; --robin-tint:#221610; --code-bg:#0b101a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --sky:#0e131c; --surface:#141a25; --raised:#19202d; --ink:#e8ebf1;
+    --muted:#97a1b3; --faint:#6b7688; --line:#26303f;
+    --robin:#f26a44; --robin-deep:#db4a22; --robin-tint:#221610; --code-bg:#0b101a;
+  }
+  :root[data-theme="light"] {
+    --sky:#f5f6f8; --surface:#ffffff; --raised:#fbfcfd; --ink:#171b23;
+    --muted:#5b6474; --faint:#8b94a4; --line:#e3e6ec;
+    --robin:#db4a22; --robin-deep:#b83c18; --robin-tint:#fcefe9; --code-bg:#f1f3f6;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--sky); color:var(--ink); font-family:var(--sans);
+    font-size:17px; line-height:1.68; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:780px; margin:0 auto; padding:clamp(28px,6vw,72px) 22px 96px; }
+
+  /* language switch */
+  .langbar { position:fixed; top:14px; right:14px; z-index:20; display:flex; gap:2px;
+    padding:3px; background:var(--surface); border:1px solid var(--line);
+    border-radius:999px; box-shadow:0 2px 12px rgba(0,0,0,.07); }
+  .langbtn { font:inherit; font-size:13px; font-weight:600; letter-spacing:.01em;
+    border:0; background:none; color:var(--muted); padding:5px 13px; border-radius:999px; cursor:pointer; }
+  .langbtn:hover { color:var(--ink); }
+  .langbtn[aria-pressed="true"] { background:var(--robin); color:#fff; }
+
+  /* language visibility */
+  .doc { display:none; }
+  html[data-guide-lang="ko"] .doc[data-lang="ko"] { display:block; }
+  html[data-guide-lang="en"] .doc[data-lang="en"] { display:block; }
+  /* Korean labels: mono uppercase tracking suits Latin, not Hangul — tighten it */
+  html[data-guide-lang="ko"] h2, html[data-guide-lang="ko"] .eyebrow { letter-spacing:.02em; }
+
+  .brand { display:flex; align-items:center; gap:10px; margin-bottom:40px; }
+  .mark { width:26px; height:26px; border-radius:7px; flex:none; background:var(--robin);
+    position:relative; box-shadow:0 1px 0 rgba(0,0,0,.06); }
+  .mark::after { content:""; position:absolute; inset:0; border-radius:7px;
+    background:radial-gradient(circle at 68% 34%, rgba(255,255,255,.55) 0 3px, transparent 4px); }
+  .brand b { font-weight:700; letter-spacing:-.01em; }
+  .brand span { color:var(--faint); }
+
+  .eyebrow { font-family:var(--mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--robin); margin:0 0 14px; }
+  h1 { font-size:clamp(29px,5vw,43px); line-height:1.1; letter-spacing:-.022em;
+    font-weight:780; margin:0 0 18px; text-wrap:balance; }
+  .lede { font-size:clamp(17px,2.2vw,19px); color:var(--muted); max-width:var(--measure); margin:0; }
+
+  section { margin-top:56px; }
+  h2 { font-size:13px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.12em;
+    color:var(--faint); font-weight:600; margin:0 0 20px; padding-bottom:10px; border-bottom:1px solid var(--line); }
+  h3 { font-size:18px; letter-spacing:-.01em; margin:0 0 6px; font-weight:680; }
+  p { max-width:var(--measure); margin:0 0 14px; }
+  a { color:var(--robin-deep); text-underline-offset:2px; text-decoration-thickness:1px; }
+  @media (prefers-color-scheme: dark) { a { color:var(--robin); } }
+  :root[data-theme="dark"] a { color:var(--robin); }
+  strong { font-weight:680; }
+
+  code { font-family:var(--mono); font-size:.88em; background:var(--code-bg);
+    padding:.12em .4em; border-radius:5px; border:1px solid var(--line); }
+  pre { font-family:var(--mono); font-size:14px; line-height:1.7; background:var(--code-bg);
+    color:var(--ink); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px 18px; margin:0 0 8px; overflow-x:auto; }
+  pre code { background:none; border:0; padding:0; font-size:inherit; }
+  .cmd { color:var(--robin-deep); }
+  @media (prefers-color-scheme: dark) { .cmd { color:var(--robin); } }
+  :root[data-theme="dark"] .cmd { color:var(--robin); }
+  .comment { color:var(--faint); }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:560px) { .grid { grid-template-columns:1fr; } }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px 18px 16px; }
+  .card h3 { font-size:16px; }
+  .card p { font-size:15px; color:var(--muted); margin:0; }
+
+  ol.steps { list-style:none; counter-reset:s; margin:0; padding:0; display:flex; flex-direction:column; gap:20px; }
+  ol.steps > li { counter-increment:s; display:grid; grid-template-columns:34px 1fr; gap:16px; align-items:start; }
+  ol.steps > li::before { content:counter(s); grid-row:span 2; width:34px; height:34px; border-radius:9px;
+    display:grid; place-items:center; font-family:var(--mono); font-size:14px; font-weight:600;
+    color:var(--robin); background:var(--robin-tint); border:1px solid var(--line); }
+  ol.steps > li p { margin:2px 0 0; color:var(--muted); font-size:15.5px; }
+
+  .tablewrap { overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); }
+  table { border-collapse:collapse; width:100%; font-size:15px; }
+  th, td { text-align:left; padding:12px 16px; vertical-align:top; }
+  th { font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--faint); font-weight:600; background:var(--raised); }
+  tr + tr td { border-top:1px solid var(--line); }
+  td:first-child { font-weight:600; white-space:nowrap; }
+
+  ul.plain { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:10px; }
+  ul.plain li { position:relative; padding-left:20px; color:var(--muted); }
+  ul.plain li::before { content:""; position:absolute; left:2px; top:11px; width:6px; height:6px; border-radius:50%; background:var(--robin); }
+  ul.plain li b { color:var(--ink); font-weight:640; }
+
+  .note { background:var(--robin-tint); border:1px solid var(--line); border-left:3px solid var(--robin);
+    border-radius:10px; padding:16px 18px; display:flex; flex-direction:column; gap:8px; }
+  .note p { margin:0; color:var(--ink); font-size:15px; }
+  .note b { color:var(--robin-deep); }
+  @media (prefers-color-scheme: dark) { .note b { color:var(--robin); } }
+  :root[data-theme="dark"] .note b { color:var(--robin); }
+
+  footer { margin-top:72px; padding-top:22px; border-top:1px solid var(--line); color:var(--faint); font-size:14px; }
+  footer a { color:var(--muted); }
+  :focus-visible { outline:2px solid var(--robin); outline-offset:2px; border-radius:3px; }
+</style>
+</head>
+<body>
+
+<nav class="langbar" aria-label="Language">
+  <button class="langbtn" data-lang="ko" aria-pressed="true">한국어</button>
+  <button class="langbtn" data-lang="en" aria-pressed="false">English</button>
+</nav>
+
+<main class="wrap">
+
+  <!-- ═══════════════ 한국어 (기본) ═══════════════ -->
+  <div class="doc" data-lang="ko">
+    <div class="brand"><div class="mark" aria-hidden="true"></div><b>Robin-Cloud</b><span>· 온보딩</span></div>
+
+    <p class="eyebrow">Claude Code 플러그인</p>
+    <h1>설정을 대신 해주는 에이전트로 배포하세요.</h1>
+    <p class="lede">
+      <code>robin-cloud-onboarding</code> 플러그인이 당신의 repo를 읽어 배포 파일을 만들고,
+      콘솔을 단계별로 안내하고, 배포까지 마칩니다 — 문제가 생기면 앱 로그를 읽어 고쳐줍니다.
+      Kubernetes도, 클러스터 접근도 필요 없습니다.
+    </p>
+
+    <section>
+      <h2>무엇을 얻나요</h2>
+      <div class="grid">
+        <div class="card"><h3>시크릿 없는 CI</h3><p>GitHub Actions에서 <strong>repo에 시크릿 0개</strong>로 배포 — GitHub 자체 신원을 단기 빌드 자격으로 교환합니다.</p></div>
+        <div class="card"><h3>매니지드 · HTTPS</h3><p>매니지드 Kubernetes 위에서 컨테이너 실행, TLS 인증서 자동 발급 — 갱신할 것이 없습니다.</p></div>
+        <div class="card"><h3>내 도메인</h3><p>DNS 레코드 하나만 가리키면 내 도메인에서, 유효한 인증서로 서비스됩니다.</p></div>
+        <div class="card"><h3>자가 치유</h3><p>에이전트가 각 단계를 검증하고, 실패하면 앱 로그를 읽어 원인을 고칩니다.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>어떻게 동작하나요</h2>
+      <ol class="steps">
+        <li><h3>repo 분석</h3><p>배포할 조각(프론트·관리자·API…)을 스택·빌드 명령·포트와 함께 파악합니다.</p></li>
+        <li><h3>파일 생성</h3><p>조각마다 <code>Dockerfile</code>, 키리스 CI 워크플로, nginx 설정, <code>.dockerignore</code>를 만듭니다.</p></li>
+        <li><h3>콘솔 안내</h3><p>정확한 클릭 순서(프로젝트·GitHub 연결·이미지 저장소·배포설정·DB·도메인)를 안내하고 각각 확인합니다.</p></li>
+        <li><h3>배포 · 검증</h3><p>빌드를 지켜보고, 사이트를 curl하고, 로그를 읽어 흔한 실패를 <code>200</code>이 나올 때까지 고칩니다.</p></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>시작하기 전에</h2>
+      <div class="tablewrap"><table>
+        <tr><th>필요한 것</th><th>어디서</th></tr>
+        <tr><td>콘솔 계정</td><td><a href="https://robin-cloud.com">robin-cloud.com</a> — 신규 가입은 초대코드 필요</td></tr>
+        <tr><td>GitHub repo + <code>gh</code></td><td><code>gh auth login</code>, repo 관리자 권한</td></tr>
+        <tr><td>로그 API 키</td><td>콘솔 → 설정 → <strong>“로그 API 키”</strong> → 발급 → <code>export ROBIN_LOG_API_KEY=rblog_…</code></td></tr>
+        <tr><td>Claude Code</td><td>내 프로젝트 repo에서 실행</td></tr>
+      </table></div>
+    </section>
+
+    <section>
+      <h2>1단계 — 플러그인 설치</h2>
+      <pre><code><span class="cmd">/plugin marketplace add</span> robintech-seoul/agent-toolkit
+<span class="cmd">/plugin install</span> robin-cloud-onboarding@robintech</code></pre>
+    </section>
+
+    <section>
+      <h2>2단계 — 실행</h2>
+      <p>내 프로젝트 repo에서:</p>
+      <pre><code><span class="cmd">/robin-cloud-onboarding:onboard</span>   <span class="comment"># 또는 그냥: "이 repo를 Robin-Cloud에 온보딩해줘"</span></code></pre>
+      <p>이후는 에이전트가 진행합니다. <strong>당신 몫</strong>은 에이전트가 하나씩 알려주는 콘솔 클릭, <strong>에이전트 몫</strong>은 파일 작성·빌드·검증입니다.</p>
+    </section>
+
+    <section>
+      <h2>repo에 생성되는 것</h2>
+      <ul class="plain">
+        <li><b><code>&lt;컴포넌트&gt;/Dockerfile</code></b> — 이미지마다 하나(nginx 뒤 정적 SPA, Python/Node 서버 등).</li>
+        <li><b><code>&lt;컴포넌트&gt;/nginx.conf</code></b> — 프론트용(루트 또는 서브패스).</li>
+        <li><b><code>.github/workflows/deploy-robin-cloud.yml</code></b> — 키리스 배포 파이프라인, 시크릿 0개.</li>
+        <li><b><code>.dockerignore</code></b>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>콘솔에서 할 일</h2>
+      <p>에이전트가 언제 무엇을 할지 정확히 알려줍니다 — 순서대로:</p>
+      <ol class="steps">
+        <li><h3>프로젝트 생성</h3></li>
+        <li><h3>GitHub 연결</h3><p>“GitHub App으로 연결” → 내 repo에 설치 → 승인.</p></li>
+        <li><h3>이미지 저장소 생성</h3><p>컴포넌트마다 하나.</p></li>
+        <li><h3>배포설정 저장</h3><p>포트와 각 조각이 서비스될 경로.</p></li>
+        <li><h3>DB 생성 · 시크릿 설정</h3><p>서버가 있다면.</p></li>
+        <li><h3>도메인 연결</h3><p>선택.</p></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>문제가 생기면</h2>
+      <p>혼자 디버깅하지 않습니다. 에이전트가 설정 때 만든 그 로그 API 키로 HTTPS로 파드 로그를 당겨,
+      흔한 원인(잘못된 드라이버의 DB URL, 누락된 시크릿, 미실행 마이그레이션, 포트 불일치)을
+      알아채고 고친 뒤, 앱이 <code>200</code>을 낼 때까지 다시 확인합니다.</p>
+    </section>
+
+    <section>
+      <h2>알아두면 좋은 것</h2>
+      <div class="note">
+        <p><b>URL에 포트가 없습니다.</b> 클러스터 <em>내부</em>에서는 8080으로 돌지만, 접속은 일반 HTTPS — <code>https://내도메인/</code>, 절대 <code>:8080</code> 아님.</p>
+        <p><b>커스텀 도메인?</b> 그 도메인의 DNS <strong>A 레코드를 <code>3.35.86.196</code></strong>(Robin-Cloud 게이트웨이)으로 가리키고, 배포설정의 ingress host에 지정하면 — TLS는 자동 발급됩니다.</p>
+        <p><b>서브패스의 두 번째 앱</b>(예: 관리자 <code>/admin</code>)은 <strong>끝에 슬래시를 붙여</strong> 접속: <code>https://내도메인/admin/</code>.</p>
+      </div>
+    </section>
+
+    <footer>
+      <a href="https://github.com/robintech-seoul/agent-toolkit">robintech-seoul/agent-toolkit</a> 마켓플레이스의 일부 ·
+      에이전트 런북은 <code>skills/onboard/SKILL.md</code>.
+    </footer>
+  </div>
+
+  <!-- ═══════════════ English ═══════════════ -->
+  <div class="doc" data-lang="en">
+    <div class="brand"><div class="mark" aria-hidden="true"></div><b>Robin-Cloud</b><span>· onboarding</span></div>
+
+    <p class="eyebrow">Claude Code plugin</p>
+    <h1>Deploy your project with an agent that does the setup.</h1>
+    <p class="lede">
+      The <code>robin-cloud-onboarding</code> plugin reads your repo, writes the deploy
+      files, walks you through the console, ships it — and if anything breaks, reads your
+      app's logs and fixes it. No Kubernetes, no cluster access on your side.
+    </p>
+
+    <section>
+      <h2>What you get</h2>
+      <div class="grid">
+        <div class="card"><h3>Keyless CI</h3><p>Deploys from GitHub Actions with <strong>zero secrets in your repo</strong> — GitHub's own identity is exchanged for short-lived build credentials.</p></div>
+        <div class="card"><h3>Managed &amp; HTTPS</h3><p>Containers on managed Kubernetes with automatic TLS certificates — nothing to renew.</p></div>
+        <div class="card"><h3>Your own domain</h3><p>Point one DNS record and you're live on your domain, with a valid certificate.</p></div>
+        <div class="card"><h3>Self-healing</h3><p>The agent verifies each step and debugs failures straight from your pod logs.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>How it works</h2>
+      <ol class="steps">
+        <li><h3>Analyzes your repo</h3><p>Finds each deployable piece — frontend, admin, API — with its stack, build command, and port.</p></li>
+        <li><h3>Generates the files</h3><p>A <code>Dockerfile</code> per piece, a keyless CI workflow, nginx config, and <code>.dockerignore</code>.</p></li>
+        <li><h3>Guides the console</h3><p>Hands you exact clicks — project, GitHub connect, image repos, deploy config, database, domain — and confirms each one.</p></li>
+        <li><h3>Deploys &amp; verifies</h3><p>Watches the build, curls your site, reads the logs, and fixes common failures until it answers <code>200</code>.</p></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Before you start</h2>
+      <div class="tablewrap"><table>
+        <tr><th>You need</th><th>Where</th></tr>
+        <tr><td>Console account</td><td><a href="https://robin-cloud.com">robin-cloud.com</a> — new signups need an invite code</td></tr>
+        <tr><td>Repo on GitHub + <code>gh</code></td><td><code>gh auth login</code>, with admin on the repo</td></tr>
+        <tr><td>A log API key</td><td>console → Settings → <strong>“로그 API 키”</strong> (Log API key) → issue → <code>export ROBIN_LOG_API_KEY=rblog_…</code></td></tr>
+        <tr><td>Claude Code</td><td>running in your project repo</td></tr>
+      </table></div>
+    </section>
+
+    <section>
+      <h2>Step 1 — Install the plugin</h2>
+      <pre><code><span class="cmd">/plugin marketplace add</span> robintech-seoul/agent-toolkit
+<span class="cmd">/plugin install</span> robin-cloud-onboarding@robintech</code></pre>
+    </section>
+
+    <section>
+      <h2>Step 2 — Run it</h2>
+      <p>In your project repo:</p>
+      <pre><code><span class="cmd">/robin-cloud-onboarding:onboard</span>   <span class="comment"># or just: "onboard this repo to Robin-Cloud"</span></code></pre>
+      <p>The agent takes over. <strong>Your part</strong> is the console clicks it hands you, one at a time; <strong>its part</strong> is writing the files, running the build, and verifying.</p>
+    </section>
+
+    <section>
+      <h2>What it writes in your repo</h2>
+      <ul class="plain">
+        <li><b><code>&lt;component&gt;/Dockerfile</code></b> — one per image (a static SPA behind nginx, a Python/Node server…).</li>
+        <li><b><code>&lt;component&gt;/nginx.conf</code></b> — for frontends, at the root or a subpath.</li>
+        <li><b><code>.github/workflows/deploy-robin-cloud.yml</code></b> — the keyless deploy pipeline, no secrets.</li>
+        <li><b><code>.dockerignore</code></b>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>What you'll do in the console</h2>
+      <p>The agent tells you exactly when and what — in order:</p>
+      <ol class="steps">
+        <li><h3>Create the project</h3></li>
+        <li><h3>Connect GitHub</h3><p>“GitHub App으로 연결” → install on your repo → approve.</p></li>
+        <li><h3>Create image repos</h3><p>One per component.</p></li>
+        <li><h3>Save the deploy config</h3><p>Ports and the path each piece is served at.</p></li>
+        <li><h3>Create a database &amp; set secrets</h3><p>If you have a server.</p></li>
+        <li><h3>Point your domain</h3><p>Optional.</p></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>If something breaks</h2>
+      <p>You don't debug alone. The agent pulls your pod logs over HTTPS — the same log
+      API key from setup — recognizes the usual culprits (a database URL on the wrong
+      driver, a missing secret, an un-run migration, a port mismatch), fixes them, and
+      re-checks until your app answers <code>200</code>.</p>
+    </section>
+
+    <section>
+      <h2>Good to know</h2>
+      <div class="note">
+        <p><b>URLs have no port.</b> Everything runs on 8080 <em>inside</em> the cluster; you reach it over normal HTTPS — <code>https://yourdomain/</code>, never <code>:8080</code>.</p>
+        <p><b>Custom domain?</b> Point its DNS <strong>A record to <code>3.35.86.196</code></strong> (the Robin-Cloud gateway), then set it as the ingress host in the deploy config — TLS is issued automatically.</p>
+        <p><b>A second app at a subpath</b> (e.g. an admin at <code>/admin</code>) is reached <strong>with a trailing slash</strong>: <code>https://yourdomain/admin/</code>.</p>
+      </div>
+    </section>
+
+    <footer>
+      Part of the <a href="https://github.com/robintech-seoul/agent-toolkit">robintech-seoul/agent-toolkit</a> marketplace ·
+      the agent's full runbook is in <code>skills/onboard/SKILL.md</code>.
+    </footer>
+  </div>
+
+</main>
+
+<script>
+  (function(){
+    var KEY='robin-guide-lang', root=document.documentElement;
+    function set(lang){
+      root.setAttribute('data-guide-lang', lang);
+      root.setAttribute('lang', lang);
+      try { localStorage.setItem(KEY, lang); } catch(e) {}
+      var btns = document.querySelectorAll('.langbtn');
+      for (var i=0;i<btns.length;i++) btns[i].setAttribute('aria-pressed', btns[i].dataset.lang===lang ? 'true':'false');
+    }
+    var saved; try { saved = localStorage.getItem(KEY); } catch(e) {}
+    set(saved==='en' ? 'en' : 'ko');
+    var btns = document.querySelectorAll('.langbtn');
+    for (var i=0;i<btns.length;i++) btns[i].addEventListener('click', function(){ set(this.dataset.lang); });
+  })();
+</script>
+</body>
+</html>

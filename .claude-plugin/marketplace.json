@@ -7,6 +7,11 @@
   "description": "RobinTech agent toolkit — engineering skills and product tooling for coding agents.",
   "plugins": [
     {
+      "name": "robin-cloud-onboarding",
+      "source": "./claude/plugins/robin-cloud-onboarding",
+      "description": "Onboard your project to Robin-Cloud end-to-end with an AI agent — analyze the repo, generate Dockerfiles + a keyless CI workflow + nginx, then drive the console setup (GitHub App, ECR, deploy config, DB, custom domain + TLS) with verified checkpoints. No cluster access needed."
+    },
+    {
       "name": "arch-explorer",
       "source": "./claude/skills/arch-explorer",
       "description": "Build an interactive, recursively drillable architecture map of a codebase as a single self-contained HTML file — boxes are modules, labeled arrows are the interfaces between them, and every arrow expands to full signatures with source locations."

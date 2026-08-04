@@ -1,0 +1,9 @@
+{
+  "name": "robin-cloud-onboarding",
+  "version": "0.1.0",
+  "description": "Onboard your project to Robin-Cloud end-to-end with an AI agent — analyze the repo, generate Dockerfiles + a keyless CI workflow, and drive the console setup (GitHub App, ECR, deploy config, DB, custom domain + TLS) with verified checkpoints. No cluster access needed.",
+  "author": {
+    "name": "RobinTech"
+  },
+  "keywords": ["robin-cloud", "onboarding", "deploy", "ci", "keyless", "docker", "kubernetes"]
+}

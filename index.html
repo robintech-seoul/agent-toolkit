@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko" data-guide-lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RobinTech agent toolkit</title>
+<meta name="description" content="RobinTech이 만들고 쓰는 코딩 에이전트 도구 모음 — 마켓플레이스 하나를 추가하고 필요한 플러그인만 설치하세요.">
+<script>
+  // FOUC 방지: 렌더 전에 저장된 언어를 반영 (기본 ko) — 온보딩 가이드와 같은 키를 공유
+  (function(){ try {
+    var l = localStorage.getItem('robin-guide-lang');
+    var lang = (l === 'en') ? 'en' : 'ko';
+    var r = document.documentElement;
+    r.setAttribute('data-guide-lang', lang); r.setAttribute('lang', lang);
+  } catch (e) {} })();
+</script>
+<style>
+  :root {
+    --sky:#f5f6f8; --surface:#ffffff; --raised:#fbfcfd; --ink:#171b23;
+    --muted:#5b6474; --faint:#8b94a4; --line:#e3e6ec;
+    --robin:#db4a22; --robin-deep:#b83c18; --robin-tint:#fcefe9; --code-bg:#f1f3f6;
+    --radius:12px; --measure:64ch;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --sky:#0e131c; --surface:#141a25; --raised:#19202d; --ink:#e8ebf1;
+      --muted:#97a1b3; --faint:#6b7688; --line:#26303f;
+      --robin:#f26a44; --robin-deep:#db4a22; --robin-tint:#221610; --code-bg:#0b101a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --sky:#0e131c; --surface:#141a25; --raised:#19202d; --ink:#e8ebf1;
+    --muted:#97a1b3; --faint:#6b7688; --line:#26303f;
+    --robin:#f26a44; --robin-deep:#db4a22; --robin-tint:#221610; --code-bg:#0b101a;
+  }
+  :root[data-theme="light"] {
+    --sky:#f5f6f8; --surface:#ffffff; --raised:#fbfcfd; --ink:#171b23;
+    --muted:#5b6474; --faint:#8b94a4; --line:#e3e6ec;
+    --robin:#db4a22; --robin-deep:#b83c18; --robin-tint:#fcefe9; --code-bg:#f1f3f6;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--sky); color:var(--ink); font-family:var(--sans);
+    font-size:17px; line-height:1.68; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:780px; margin:0 auto; padding:clamp(28px,6vw,72px) 22px 96px; }
+
+  /* language switch */
+  .langbar { position:fixed; top:14px; right:14px; z-index:20; display:flex; gap:2px;
+    padding:3px; background:var(--surface); border:1px solid var(--line);
+    border-radius:999px; box-shadow:0 2px 12px rgba(0,0,0,.07); }
+  .langbtn { font:inherit; font-size:13px; font-weight:600; letter-spacing:.01em;
+    border:0; background:none; color:var(--muted); padding:5px 13px; border-radius:999px; cursor:pointer; }
+  .langbtn:hover { color:var(--ink); }
+  .langbtn[aria-pressed="true"] { background:var(--robin); color:#fff; }
+
+  /* language visibility */
+  .doc { display:none; }
+  html[data-guide-lang="ko"] .doc[data-lang="ko"] { display:block; }
+  html[data-guide-lang="en"] .doc[data-lang="en"] { display:block; }
+  /* Korean labels: mono uppercase tracking suits Latin, not Hangul — tighten it */
+  html[data-guide-lang="ko"] h2, html[data-guide-lang="ko"] .eyebrow { letter-spacing:.02em; }
+
+  .brand { display:flex; align-items:center; gap:10px; margin-bottom:40px; }
+  .mark { width:26px; height:26px; border-radius:7px; flex:none; background:var(--robin);
+    position:relative; box-shadow:0 1px 0 rgba(0,0,0,.06); }
+  .mark::after { content:""; position:absolute; inset:0; border-radius:7px;
+    background:radial-gradient(circle at 68% 34%, rgba(255,255,255,.55) 0 3px, transparent 4px); }
+  .brand b { font-weight:700; letter-spacing:-.01em; }
+  .brand span { color:var(--faint); }
+
+  .eyebrow { font-family:var(--mono); font-size:12px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--robin); margin:0 0 14px; }
+  h1 { font-size:clamp(29px,5vw,43px); line-height:1.1; letter-spacing:-.022em;
+    font-weight:780; margin:0 0 18px; text-wrap:balance; }
+  .lede { font-size:clamp(17px,2.2vw,19px); color:var(--muted); max-width:var(--measure); margin:0; }
+
+  section { margin-top:56px; }
+  h2 { font-size:13px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.12em;
+    color:var(--faint); font-weight:600; margin:0 0 20px; padding-bottom:10px; border-bottom:1px solid var(--line); }
+  h3 { font-size:18px; letter-spacing:-.01em; margin:0 0 6px; font-weight:680; }
+  p { max-width:var(--measure); margin:0 0 14px; }
+  a { color:var(--robin-deep); text-underline-offset:2px; text-decoration-thickness:1px; }
+  @media (prefers-color-scheme: dark) { a { color:var(--robin); } }
+  :root[data-theme="dark"] a { color:var(--robin); }
+  strong { font-weight:680; }
+
+  code { font-family:var(--mono); font-size:.88em; background:var(--code-bg);
+    padding:.12em .4em; border-radius:5px; border:1px solid var(--line); }
+  pre { font-family:var(--mono); font-size:14px; line-height:1.7; background:var(--code-bg);
+    color:var(--ink); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px 18px; margin:0 0 8px; overflow-x:auto; }
+  pre code { background:none; border:0; padding:0; font-size:inherit; }
+  .cmd { color:var(--robin-deep); }
+  @media (prefers-color-scheme: dark) { .cmd { color:var(--robin); } }
+  :root[data-theme="dark"] .cmd { color:var(--robin); }
+  .comment { color:var(--faint); }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:560px) { .grid { grid-template-columns:1fr; } }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:18px 18px 16px; }
+  .card p { font-size:15px; color:var(--muted); margin:0; }
+
+  /* plugin cards — whole card is the link */
+  a.card { display:flex; flex-direction:column; text-decoration:none; color:inherit;
+    transition:border-color .14s ease, background-color .14s ease; }
+  a.card:hover { border-color:var(--robin); background:var(--raised); }
+  a.card h3 { font-family:var(--mono); font-size:15px; font-weight:640; letter-spacing:-.005em;
+    margin:0 0 8px; color:var(--ink); }
+  a.card .invoke { margin:0 0 10px; }
+  a.card .invoke code { font-size:12.5px; color:var(--robin-deep); }
+  @media (prefers-color-scheme: dark) { a.card .invoke code { color:var(--robin); } }
+  :root[data-theme="dark"] a.card .invoke code { color:var(--robin); }
+  /* margin-top:auto pins the CTA to the card floor so both cards' links line up */
+  a.card .more { margin-top:auto; padding-top:14px; font-size:14px; font-weight:640; color:var(--robin-deep); }
+  @media (prefers-color-scheme: dark) { a.card .more { color:var(--robin); } }
+  :root[data-theme="dark"] a.card .more { color:var(--robin); }
+
+  ul.plain { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:10px; }
+  ul.plain li { position:relative; padding-left:20px; color:var(--muted); }
+  ul.plain li::before { content:""; position:absolute; left:2px; top:11px; width:6px; height:6px;
+    border-radius:50%; background:var(--robin); }
+  ul.plain li b { color:var(--ink); font-weight:640; }
+
+  footer { margin-top:72px; padding-top:22px; border-top:1px solid var(--line); color:var(--faint); font-size:14px; }
+  footer a { color:var(--muted); }
+  :focus-visible { outline:2px solid var(--robin); outline-offset:2px; border-radius:3px; }
+</style>
+</head>
+<body>
+
+<nav class="langbar" aria-label="Language">
+  <button class="langbtn" data-lang="ko" aria-pressed="true">한국어</button>
+  <button class="langbtn" data-lang="en" aria-pressed="false">English</button>
+</nav>
+
+<main class="wrap">
+
+  <!-- ═══════════════ 한국어 (기본) ═══════════════ -->
+  <div class="doc" data-lang="ko">
+    <div class="brand"><div class="mark" aria-hidden="true"></div><b>RobinTech</b><span>· agent toolkit</span></div>
+
+    <p class="eyebrow">Claude Code 마켓플레이스</p>
+    <h1>RobinTech이 만들고 쓰는 에이전트 도구.</h1>
+    <p class="lede">
+      마켓플레이스 하나를 추가하고, 필요한 것만 설치하세요. 범용 스킬은 어떤 코드베이스에서든
+      동작하고, 제품 도구는 Robin-Cloud와 맞물립니다.
+    </p>
+
+    <section>
+      <h2>설치</h2>
+      <pre><code><span class="cmd">/plugin marketplace add</span> robintech-seoul/agent-toolkit
+<span class="cmd">/plugin install</span> arch-explorer@robintech</code></pre>
+      <p style="font-size:15px;color:var(--muted);margin-top:12px">
+        마켓플레이스는 한 번만 추가하면 됩니다. CLI에서는
+        <code>claude plugin marketplace add …</code> 로도 같은 일을 할 수 있습니다.
+      </p>
+    </section>
+
+    <section>
+      <h2>플러그인</h2>
+      <div class="grid">
+        <a class="card" href="./claude/plugins/robin-cloud-onboarding/">
+          <h3>robin-cloud-onboarding</h3>
+          <p class="invoke"><code>/robin-cloud-onboarding:onboard</code></p>
+          <p>내 프로젝트를 Robin-Cloud에 온보딩합니다 — Dockerfile과 키리스 CI 워크플로를 만들고,
+             콘솔 설정(GitHub App·ECR·배포설정·DB·도메인·TLS)을 단계마다 검증하며 안내합니다.
+             클러스터 접근이 필요 없습니다.</p>
+          <span class="more">가이드 읽기 →</span>
+        </a>
+        <a class="card" href="https://github.com/robintech-seoul/agent-toolkit/tree/main/claude/skills/arch-explorer">
+          <h3>arch-explorer</h3>
+          <p class="invoke"><code>/arch-explorer:build</code></p>
+          <p>코드베이스를 파고들 수 있는 단일 HTML 파일로 그려냅니다 — 박스는 모듈, 화살표는 그
+             사이의 인터페이스이고, 각 화살표를 펼치면 전체 시그니처와 <code>file:line</code>
+             위치가 나옵니다.</p>
+          <span class="more">README 보기 →</span>
+        </a>
+      </div>
+    </section>
+
+    <section>
+      <h2>구성</h2>
+      <ul class="plain">
+        <li><b>claude/skills/</b> — 범용 스킬. 어떤 스택·어떤 저장소에서도 쓸 수 있고 RobinTech 제품을 알지 못합니다.</li>
+        <li><b>claude/plugins/</b> — 제품 도구. Robin-Cloud 운영이나 콘솔 워크플로처럼 특정 제품에 묶여 있습니다.</li>
+        <li><b>하나의 마켓플레이스</b> — <code>robintech</code>. 다른 에이전트를 지원하게 되어도 마켓플레이스를 또 만들 필요가 없습니다.</li>
+      </ul>
+    </section>
+
+    <footer>
+      소스와 기여 방법은
+      <a href="https://github.com/robintech-seoul/agent-toolkit">robintech-seoul/agent-toolkit</a>에 있습니다.
+    </footer>
+  </div>
+
+  <!-- ═══════════════ English ═══════════════ -->
+  <div class="doc" data-lang="en">
+    <div class="brand"><div class="mark" aria-hidden="true"></div><b>RobinTech</b><span>· agent toolkit</span></div>
+
+    <p class="eyebrow">Claude Code marketplace</p>
+    <h1>Agent tooling RobinTech builds and uses.</h1>
+    <p class="lede">
+      Add one marketplace, install what you want. The general-purpose skills work on any
+      codebase; the product tooling plugs into Robin-Cloud.
+    </p>
+
+    <section>
+      <h2>Install</h2>
+      <pre><code><span class="cmd">/plugin marketplace add</span> robintech-seoul/agent-toolkit
+<span class="cmd">/plugin install</span> arch-explorer@robintech</code></pre>
+      <p style="font-size:15px;color:var(--muted);margin-top:12px">
+        You only add the marketplace once. The CLI does the same thing with
+        <code>claude plugin marketplace add …</code>.
+      </p>
+    </section>
+
+    <section>
+      <h2>Plugins</h2>
+      <div class="grid">
+        <a class="card" href="./claude/plugins/robin-cloud-onboarding/">
+          <h3>robin-cloud-onboarding</h3>
+          <p class="invoke"><code>/robin-cloud-onboarding:onboard</code></p>
+          <p>Onboard your project to Robin-Cloud — generates Dockerfiles and a keyless CI
+             workflow, then walks you through the console setup (GitHub App, ECR, deploy
+             config, DB, domain, TLS), verifying each step. No cluster access needed.</p>
+          <span class="more">Read the guide →</span>
+        </a>
+        <a class="card" href="https://github.com/robintech-seoul/agent-toolkit/tree/main/claude/skills/arch-explorer">
+          <h3>arch-explorer</h3>
+          <p class="invoke"><code>/arch-explorer:build</code></p>
+          <p>Map a codebase into a single self-contained HTML file you can drill through —
+             boxes are modules, labeled arrows are the interfaces between them, each expanding
+             to full signatures and <code>file:line</code> sources.</p>
+          <span class="more">Read the README →</span>
+        </a>
+      </div>
+    </section>
+
+    <section>
+      <h2>Layout</h2>
+      <ul class="plain">
+        <li><b>claude/skills/</b> — general-purpose skills. Any stack, any repo, no knowledge of RobinTech products.</li>
+        <li><b>claude/plugins/</b> — product tooling, tied to something specific like Robin-Cloud operations or console workflows.</li>
+        <li><b>One marketplace</b> — <code>robintech</code>. Supporting another agent later won't mean another marketplace to install.</li>
+      </ul>
+    </section>
+
+    <footer>
+      Source and contribution notes live at
+      <a href="https://github.com/robintech-seoul/agent-toolkit">robintech-seoul/agent-toolkit</a>.
+    </footer>
+  </div>
+
+</main>
+
+<script>
+  (function(){
+    var KEY='robin-guide-lang', root=document.documentElement;
+    function set(lang){
+      root.setAttribute('data-guide-lang', lang);
+      root.setAttribute('lang', lang);
+      try { localStorage.setItem(KEY, lang); } catch(e) {}
+      var btns = document.querySelectorAll('.langbtn');
+      for (var i=0;i<btns.length;i++) btns[i].setAttribute('aria-pressed', btns[i].dataset.lang===lang ? 'true':'false');
+    }
+    var saved; try { saved = localStorage.getItem(KEY); } catch(e) {}
+    set(saved==='en' ? 'en' : 'ko');
+    var btns = document.querySelectorAll('.langbtn');
+    for (var i=0;i<btns.length;i++) btns[i].addEventListener('click', function(){ set(this.dataset.lang); });
+  })();
+</script>
+</body>
+</html>

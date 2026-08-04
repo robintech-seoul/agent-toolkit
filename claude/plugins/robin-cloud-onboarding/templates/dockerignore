@@ -1,0 +1,26 @@
+# .dockerignore — keep build context lean and never bake local state/secrets.
+# (Copy to the repo root as `.dockerignore`. Add/trim per stack.)
+
+# Node / frontend
+**/node_modules
+**/dist
+**/.vite
+**/coverage
+
+# Python
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/*.db
+
+# Env & secrets — runtime config comes from the Robin-Cloud env/secret cards
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Git & editor cruft
+.git
+.gitignore
+**/.DS_Store
+**/*.swp

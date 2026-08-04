@@ -30,6 +30,7 @@ then `claude plugin install arch-explorer@robintech`.)
 | | What it does |
 |---|---|
 | [`arch-explorer`](./claude/skills/arch-explorer) | Map a codebase into a single self-contained HTML file you can drill through — boxes are modules, labeled arrows are the interfaces between them, each expanding to full signatures and `file:line` sources. |
+| [`robin-cloud-onboarding`](./claude/plugins/robin-cloud-onboarding) | Onboard a repo to [Robin-Cloud](https://robin-cloud.com) end-to-end — generate Dockerfiles + a keyless CI workflow + nginx, then drive the console setup (GitHub App, ECR, deploy config, DB, custom domain + TLS) with verified checkpoints. No cluster access needed. |
 
 ## Adding to the marketplace
 
@@ -57,6 +58,20 @@ a skill applies, so write it to cover the phrasings a user would actually use.
 The marketplace manifest has to sit at `.claude-plugin/marketplace.json` in the
 repo root — Claude Code fixes that path — but its `source` values are relative,
 which is what lets the plugins themselves live under `claude/`.
+
+## The published site
+
+[`index.html`](./index.html) at the repo root is the GitHub Pages landing page —
+it lists each plugin and links to its guide. A plugin with a user-facing guide
+keeps it at `<plugin>/index.html`, reached at
+`…github.io/agent-toolkit/claude/plugins/<plugin>/`. Add a card to the root page
+when you add a plugin.
+
+The empty `.nojekyll` marker turns off Jekyll so files are served as-is; the
+tradeoff is that a directory without an `index.html` 404s instead of falling
+back to its README.
+
+## Developing
 
 To try a change before pushing, add the local checkout as a marketplace:
 

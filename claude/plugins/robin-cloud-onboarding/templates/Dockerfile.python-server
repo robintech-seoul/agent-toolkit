@@ -1,0 +1,45 @@
+# TEMPLATE — Python web server (FastAPI/uvicorn, Flask/gunicorn, Django, …) on Robin-Cloud.
+# The agent adapts <PLACEHOLDERS> to the repo. Key Robin-Cloud rules:
+#   • Listen on 8080 (Robin-Cloud default containerPort).
+#   • Expose a health path the readiness probe can hit (default the app's /health).
+#   • DB migrations run as a SEPARATE deploy step, not in the image start command
+#     (a multi-replica rollout must not race the schema).
+#
+# Dependency manager: pick the block matching the repo (uv.lock → uv,
+# poetry.lock → poetry, requirements.txt → pip). uv shown; swap if needed.
+
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    PATH="/app/.venv/bin:$PATH"
+
+RUN pip install --no-cache-dir uv        # or: skip for pip/poetry blocks below
+
+WORKDIR /app
+
+# --- deps (cached until the lockfile changes) ---
+# uv:
+COPY <MODULE>/pyproject.toml <MODULE>/uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+# pip alternative:
+#   COPY <MODULE>/requirements.txt ./ ; RUN pip install --no-cache-dir -r requirements.txt
+
+# --- app source ---
+COPY <MODULE>/ ./
+
+# Drop root.
+RUN useradd --create-home --uid 10001 app && chown -R app:app /app
+USER app
+
+EXPOSE 8080
+
+# ⚠️ DATABASE_URL / SECRET_KEY / provider keys come from the Robin-Cloud env+secret
+# cards at runtime — NOT baked here. For async SQLAlchemy/SQLModel the URL MUST be an
+# ASYNC driver:  postgresql+asyncpg://…  (plain postgresql:// pulls psycopg2 → crash).
+#
+# Migrations: run as an init container / job, e.g. `alembic upgrade head`, before this.
+CMD ["<START_COMMAND: e.g. uvicorn main:app --host 0.0.0.0 --port 8080>"]
