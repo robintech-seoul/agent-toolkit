@@ -1,2 +1,7 @@
 # macOS
 .DS_Store
+
+# never commit credentials
+.robin/
+*log-api-key*
+.creds.json

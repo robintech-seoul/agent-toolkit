@@ -1,0 +1,162 @@
+# TEMPLATE → .github/workflows/deploy-robin-cloud.yml
+# Keyless CI to Robin-Cloud: per changed component, exchange the runner's GitHub
+# OIDC token for short-lived, PROJECT-scoped ECR push credentials (ZERO repo secrets
+# — no AWS key, IAM role, or deploy token), build + push to <PROJECT>-<module>, then
+# request a deploy. Self-contained (no external action). Adapt the PLACEHOLDERS.
+#
+# Prereqs (console, one-time): repo connected via the GitHub App; ECR repos
+# <PROJECT>-<module> created. The FIRST run works before deploy-config is saved —
+# images are pushed and the deploy bump is tolerated as 404.
+name: Deploy to Robin-Cloud
+
+on:
+  push:
+    branches: [<DEFAULT_BRANCH: main>]
+  workflow_dispatch: {}              # manual run builds ALL components (use for the first build)
+
+permissions:
+  id-token: write                    # GitHub OIDC → vend project-scoped ECR creds
+  contents: read
+
+env:
+  PROJECT: <PROJECT_NAME>
+  REGION: ap-northeast-2
+  CONSOLE_URL: https://robin-cloud.com
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      # one line per component
+      <MODULE>: ${{ steps.filter.outputs.<MODULE> }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            <MODULE>:
+              - '<MODULE>/**'
+              # frontends in a monorepo also depend on shared pkgs + the lockfile:
+              # - 'shared-pkg/**'
+              # - 'package.json'
+              # - 'pnpm-lock.yaml'
+              # - 'pnpm-workspace.yaml'
+
+  deploy:
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.<MODULE> == 'true' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: <MODULE>
+            dockerfile: <MODULE>/Dockerfile
+            changed: ${{ needs.changes.outputs.<MODULE> }}
+          # - module: <OTHER_MODULE>
+          #   dockerfile: <OTHER_MODULE>/Dockerfile
+          #   changed: ${{ needs.changes.outputs.<OTHER_MODULE> }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if unchanged (push only)
+        if: github.event_name == 'push' && matrix.changed != 'true'
+        run: echo "no changes in ${{ matrix.module }}; skipping" && exit 0
+
+      - name: Vend ECR credentials (GitHub OIDC)
+        id: vend
+        if: github.event_name == 'workflow_dispatch' || matrix.changed == 'true'
+        shell: bash
+        env:
+          VEND_API: ${{ env.CONSOLE_URL }}/api/v1/projects/${{ env.PROJECT }}/registry-credentials
+          MODULE: ${{ matrix.module }}
+        run: |
+          set -euo pipefail
+          jwt=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=robin-cloud" | jq -r '.value')
+          if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
+            echo "::error::no GitHub OIDC token — is 'permissions: id-token: write' set?"; exit 1
+          fi
+          code=000
+          for attempt in 1 2; do
+            code=$(curl -sS -o /tmp/vend.json -w '%{http_code}' -X POST "$VEND_API" \
+              -H "X-GitHub-OIDC: $jwt" || echo 000)
+            [ "$code" != "503" ] && break
+            echo "::notice::registry-credentials 503 — retrying in 5s"; sleep 5
+          done
+          if [ "$code" -ge 300 ] 2>/dev/null; then
+            echo "::error::credential vending failed (HTTP $code): $(cat /tmp/vend.json 2>/dev/null)"; exit 1
+          fi
+          # ⚠️ serve wraps the payload in an envelope: {status, data:{registry,credentials,repositories}}.
+          registry=$(jq -r '.data.registry // empty' /tmp/vend.json)
+          ak=$(jq -r '.data.credentials.access_key_id // empty' /tmp/vend.json)
+          sk=$(jq -r '.data.credentials.secret_access_key // empty' /tmp/vend.json)
+          st=$(jq -r '.data.credentials.session_token // empty' /tmp/vend.json)
+          if [ -z "$registry" ] || [ -z "$ak" ] || [ -z "$sk" ] || [ -z "$st" ]; then
+            echo "::error::vend response missing registry/credentials — shape: $(jq -c '{status, data_keys: (.data|keys?)}' /tmp/vend.json 2>/dev/null)"; exit 1
+          fi
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$ak"; echo "::add-mask::$sk"; echo "::add-mask::$st"
+          { echo "AWS_ACCESS_KEY_ID=$ak"; echo "AWS_SECRET_ACCESS_KEY=$sk"; echo "AWS_SESSION_TOKEN=$st"; } >> "$GITHUB_ENV"
+          if ! jq -e --arg r "${PROJECT}-${MODULE}" '.data.repositories | index($r)' /tmp/vend.json >/dev/null; then
+            echo "::warning::ECR repo ${PROJECT}-${MODULE} missing — create it in the console. Present: $(jq -c '.data.repositories' /tmp/vend.json)"
+          fi
+
+      - name: Login to ECR (vended credentials)
+        if: github.event_name == 'workflow_dispatch' || matrix.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecr get-login-password --region "$REGION" \
+            | docker login --username AWS --password-stdin "${{ steps.vend.outputs.registry }}"
+
+      - name: Set up Docker Buildx
+        if: github.event_name == 'workflow_dispatch' || matrix.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push (linux/amd64)
+        if: github.event_name == 'workflow_dispatch' || matrix.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .                    # repo root (monorepo/shared pkgs need it)
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64        # Robin-Cloud nodes are amd64
+          push: true
+          tags: |
+            ${{ steps.vend.outputs.registry }}/${{ env.PROJECT }}-${{ matrix.module }}:${{ github.sha }}
+            ${{ steps.vend.outputs.registry }}/${{ env.PROJECT }}-${{ matrix.module }}:latest
+          cache-from: type=gha,scope=${{ matrix.module }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.module }}
+          # Frontend public build values (empty would override the Dockerfile default,
+          # so set ONLY what you need, via repo Variables/Secrets):
+          # build-args: |
+          #   VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
+
+      - name: Request deployment (fresh OIDC JWT)
+        if: github.event_name == 'workflow_dispatch' || matrix.changed == 'true'
+        shell: bash
+        env:
+          DEPLOY_API: ${{ env.CONSOLE_URL }}/api/v1/projects/${{ env.PROJECT }}/deployments
+          MODULE: ${{ matrix.module }}
+        run: |
+          set -uo pipefail
+          jwt=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=robin-cloud" | jq -r '.value')
+          if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
+            echo "::error::no GitHub OIDC token for the deploy request"; exit 1
+          fi
+          code=000
+          for attempt in 1 2; do
+            code=$(curl -sS -o /tmp/deploy.json -w '%{http_code}' -X POST "$DEPLOY_API" \
+              -H "X-GitHub-OIDC: $jwt" -H "Content-Type: application/json" \
+              -d "{\"component\":\"${MODULE}\",\"tag\":\"${GITHUB_SHA}\"}" || echo 000)
+            [ "$code" != "503" ] && break
+            echo "::notice::deployments 503 — retrying in 5s"; sleep 5
+          done
+          cat /tmp/deploy.json 2>/dev/null; echo
+          if [ "$code" = "404" ]; then
+            echo "::warning::${MODULE}: project not onboarded yet (save deploy-config in the console). Image pushed; skipping bump."
+          elif [ "$code" -ge 300 ] 2>/dev/null; then
+            echo "::error::${MODULE}: deploy request failed (HTTP $code)"; exit 1
+          fi
