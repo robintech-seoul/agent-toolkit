@@ -1,0 +1,81 @@
+# code-wiki configuration.
+#
+# This file is created by `/code-wiki:init` and is owned by you (the user). The plugin
+# never auto-edits it. Restructure or extend as your project evolves.
+#
+# Schema reference: see SPEC.md §5 in the code-wiki plugin source.
+
+# Schema version. Bumped if the format changes; the plugin validates on load.
+version: 1
+
+# Source roots to wikify. Each root produces an independent tree at wiki/<path>/.
+# The path itself is used as the wiki subdirectory; there is no separate name field.
+#
+# Validation rules (enforced at init and on every load):
+#   - Must be a relative path within the project, not absolute, not empty, not "."
+#   - Cannot be "wiki" or ".code-wiki" (reserved by the plugin)
+#   - Source roots cannot nest inside one another (e.g. "src" and "src/api" together)
+#   - Each path must exist as a directory at the time of operation
+#
+# Examples:
+#   - path: src                # → wiki/src/
+#   - path: packages/server    # → wiki/packages/server/
+#   - path: apps/web/src       # → wiki/apps/web/src/
+source_roots: []
+
+# Wiki output language. Free-form string; the LLM uses it as a hint when generating
+# pages. Default is "en"; common values: "en", "ko", "ja". Auto-detection is a v2 feature.
+wiki_language: en
+
+# Optional hints to bias the LLM's interpretation of the source code.
+# Examples: "typescript", "react", "django", "go", "monorepo", "event-driven"
+language_hints: []
+
+# Files and folders to skip during ingestion. gitignore-style globs evaluated
+# relative to each source root. Add patterns specific to your project.
+ignore_patterns:
+  # VCS
+  - "**/.git/**"
+  # JS / TS
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.next/**"
+  - "**/.nuxt/**"
+  - "**/.svelte-kit/**"
+  - "**/*.min.js"
+  - "**/*.lock"
+  # Python
+  - "**/__pycache__/**"
+  - "**/.venv/**"
+  - "**/venv/**"
+  - "**/env/**"
+  - "**/.pytest_cache/**"
+  - "**/.mypy_cache/**"
+  - "**/.ruff_cache/**"
+  - "**/.tox/**"
+  - "**/*.egg-info/**"
+  - "**/htmlcov/**"
+  # Other languages
+  - "**/target/**"          # Rust, Java/Maven
+  - "**/vendor/**"           # Go, PHP
+  # Tooling / editors
+  - "**/.terraform/**"
+  - "**/.idea/**"
+  - "**/.vscode/**"
+  - "**/.VSCodeCounter/**"
+  - "**/coverage/**"
+  - "**/.coverage"
+  - "**/test-results/**"
+
+# Heuristics for spawning per-file wiki pages within a leaf folder.
+# A per-file page is created when a file is large enough or its containing folder
+# has too many files for a single leaf page to carry useful detail.
+per_file_pages:
+  # Set to false to disable per-file pages entirely.
+  enabled: true
+  # Files with at least this many lines of code become per-file candidates.
+  min_loc: 800
+  # In folders with more than this many files, the most central files get per-file
+  # pages and the rest are listed only as one-liners in the leaf wiki.
+  max_files_per_folder: 20

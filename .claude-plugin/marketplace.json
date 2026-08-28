@@ -15,6 +15,11 @@
       "name": "arch-explorer",
       "source": "./claude/skills/arch-explorer",
       "description": "Build an interactive, recursively drillable architecture map of a codebase as a single self-contained HTML file — boxes are modules, labeled arrows are the interfaces between them, and every arrow expands to full signatures with source locations."
+    },
+    {
+      "name": "code-wiki",
+      "source": "./claude/skills/code-wiki",
+      "description": "Build and maintain a hierarchical, LLM-generated wiki over a codebase — leaf folders summarize their files, parents synthesize their children, topic pages capture cross-cutting concerns, and sync keeps it current with the source tree."
     }
   ]
 }

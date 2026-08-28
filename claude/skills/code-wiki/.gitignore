@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+# Fixtures: source files are tracked, but the .git/ created by init-fixtures.sh
+# and any wiki/ or .code-wiki/ produced during testing are not.
+fixtures/*/.git/
+fixtures/*/wiki/
+fixtures/*/.code-wiki/
