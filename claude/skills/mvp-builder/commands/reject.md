@@ -6,6 +6,6 @@ allowed-tools: Bash(bash:*)
 
 현재 대기 중인 산출물을 반려한다. 앞으로 나아가지 않고 같은 단계를 다시 돈다.
 
-!`bash "${CLAUDE_PLUGIN_ROOT}/bin/reject.sh" $ARGUMENTS`
+!`bash "${CLAUDE_PLUGIN_ROOT}/bin/reject.sh" "$ARGUMENTS"`
 
 무엇이 어떻게 바뀌었는지 정리해 전달해라.

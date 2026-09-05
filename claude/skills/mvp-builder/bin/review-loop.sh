@@ -13,7 +13,10 @@ for d in jq claude; do command -v $d >/dev/null 2>&1 || { echo "의존성 없음
 MAXA=$(budget review_max_attempts); MAXS=$(budget review_max_stall)
 MARGS=$(model_args)
 
-a=0; stall=0; prev_ids="__none__"
+# v4.2: 재진입(설계 반려 등) 시 라운드 번호를 기존 review-r*.json 뒤에서 이어 붙인다 — 산출물 덮어쓰기 방지.
+#   라운드 예산(MAXA)은 이번 호출에서 돈 횟수만 센다.
+a=$(ls -1 .mvp/review-r[0-9]*.json 2>/dev/null | grep -vc findings || true); a=${a:-0}; a0=$a
+stall=0; prev_ids="__none__"
 while :; do
   a=$((a+1)); echo "  ── 리뷰 라운드 $a ──"
   "$P/bin/review-gate.sh" ".mvp/review-r$a.json" "$a"; rc=$?
@@ -41,7 +44,7 @@ while :; do
     exit 1
   fi
   # 3) 상한 — 라운드 예산 소진 (새 발견이 계속 유입되는 스트림 포함)
-  if [ "$a" -ge "$MAXA" ]; then
+  if [ $((a-a0)) -ge "$MAXA" ]; then
     lg_triage > .mvp/triage.md
     st_log "review_exhausted attempts open=$open"
     echo "  ⏹ 라운드 상한 — 열린 must: $open"

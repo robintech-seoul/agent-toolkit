@@ -14,7 +14,7 @@ echo "▶ 2단계 리뷰"
 cov=$(jq -r '.coverage // 0' .mvp/design-check.json 2>/dev/null)
 # -findings.json 이 glob 에 섞여 마지막 파일이 잘못 잡히던 것을 고침
 must=$(ls -1 .mvp/review-r[0-9]*.json 2>/dev/null | grep -vE 'findings' \
-       | sort -V | tail -1 | xargs -r jq -r '.must // "?"')
+       | sort -V | tail -1 | xargs -r jq -r '.openMust // .must // "?"')   # v4.2: 게이트 산출물 키는 openMust
 # v2: design 모드는 승인 전에 분해 게이트 결과를 미리 보여준다 (강제는 approve 가 한다)
 if [ "$(st_mode)" = "design" ]; then
   echo

@@ -13,7 +13,21 @@ IDEA=$(st_get idea)
 
 for r in $(seq 1 "$N"); do
   echo "  ── 설계 라운드 $r/$N ──"
-  if [ "$r" -eq 1 ]; then
+  # v4.2: 1라운드인데 DESIGN.md 가 이미 있으면(설계 반려 후 재진입) 새로 쓰지 않는다.
+  #   반려 사유로 고친 내용을 덮어쓰던 버그. 반영률 검사를 먼저 돌려 빠진 것만 보완하고,
+  #   빠진 것이 없으면 모델을 부르지 않는다.
+  if [ "$r" -eq 1 ] && [ -f DESIGN.md ]; then
+    "$P/bin/design-check.sh" .mvp/design-check.json || true
+    MISS=$(jq -r '.missingIds // ""' .mvp/design-check.json 2>/dev/null)
+    if [ -z "$MISS" ]; then
+      echo "  기존 DESIGN.md 유지 — 반영률 $(jq -r .coverage .mvp/design-check.json)%, 빠진 항목 없음 (모델 호출 생략)"
+      cp .mvp/design-check.json ".mvp/design-check-r$r.json"
+      st_setn "rounds.design_r$r" "$(jq -c . .mvp/design-check.json)"
+      continue
+    fi
+    TASK="기존 DESIGN.md 를 유지하면서 SPEC.md 의 다음 요구사항만 보완해라: $MISS
+이미 있는 내용(특히 직전 반려로 고친 부분)은 지우거나 다시 쓰지 마라. 요구사항 대응표에도 추가해라."
+  elif [ "$r" -eq 1 ]; then
     if [ "$(st_mode)" = "design" ]; then
       TASK="SPEC.md 를 읽고 하이레벨 시스템 설계 문서 DESIGN.md 를 새로 작성해라.
 구성: 아키텍처 개요 · 모듈 상세 설계(책임·내부 구조 방향) · 모듈 간 인터페이스와 계약 ·
