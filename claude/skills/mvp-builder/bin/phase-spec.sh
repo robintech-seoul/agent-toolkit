@@ -6,6 +6,9 @@ P="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 
 # 속도 프로필(--fast/--profile)과 실행 모드(--mode build|design)를 아이디어 앞에 붙인다
 PROFILE="standard"; MODE="build"; SKILLS="full"; GATE="human"
+# v4.2: 커맨드가 인자 전체를 따옴표 하나로 넘긴다("$ARGUMENTS") — 글롭·괄호·꺾쇠가 셸에서 풀리지 않게.
+#   플래그를 가려내기 위해 공백으로만 다시 나눈다(set -f 로 글롭 확장 금지).
+if [ $# -eq 1 ]; then set -f; set -- $1; set +f; fi
 while [ $# -gt 0 ]; do
   case "$1" in
     --lite)    SKILLS="lite"; shift ;;

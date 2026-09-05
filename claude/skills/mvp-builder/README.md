@@ -51,6 +51,8 @@ prompts/
   설계는 반영률 pass + 리뷰 루프 exit 0(must 0). 미통과·판정 불가·실행 실패는 기본(human)과 똑같이 멈춘다.
   `.mvp/state.json` 의 `gate` 필드(`human`|`auto`), 이력에 `*_auto_gate_pass` / `*_auto_gate_hold` 가 남는다.
   무인 실행·스크립트용이다. 사람이 보고 결정하는 장면이 필요하면 붙이지 않는다
+- (v4.2) 설계 반려 후 재진입: `design-loop.sh` 1라운드가 기존 DESIGN.md 를 새로 쓰지 않고 빠진 항목만 보완한다(반려 수정본 보존,
+  빠진 것이 없으면 모델 호출 생략). 커맨드의 `$ARGUMENTS` 를 인용해 아이디어·사유 속 `[a|b]`·괄호·`<x>` 가 셸에서 풀리지 않는다
 - 스킬 모드는 `.mvp/state.json` 의 `skills` 필드에 기록되고 `/mvp-builder:status` 에 보인다
 
 ## 3. v3 에서 바뀐 파일
