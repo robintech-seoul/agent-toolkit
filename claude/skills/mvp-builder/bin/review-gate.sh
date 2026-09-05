@@ -18,7 +18,15 @@ DENY='{"permissions":{"deny":["Write(./DESIGN.md)","Edit(./DESIGN.md)","Write(./
 rm -f REVIEW.json
 RAW=".mvp/review-raw-r$ROUND.json"   # 라운드별 보존 — 덮어쓰지 않는다 (v2 L6 수정)
 
-if [ "$ROUND" -le 1 ] || [ ! -f "$LG" ]; then
+# v4.2: 모드는 라운드 번호가 아니라 원장으로 정한다. 원장에 발견이 이미 있으면(설계 반려 후 재진입)
+#   첫 라운드라도 델타 — 열린 must 를 재판정하고 바뀐 부분만 본다. 전체 리뷰를 다시 하면
+#   기존 must 는 영원히 열린 채 새 발견만 쌓인다(step1 실물).
+MODE="full"
+if [ -f "$LG" ] && [ "$(jq -s '[.[]|select(.ev=="found")]|length' "$LG" 2>/dev/null || echo 0)" -gt 0 ]; then MODE="delta"; fi
+[ -f .mvp/design-diff-latest.txt ] || MODE="full"   # 델타는 diff 가 있어야 한다
+echo "  리뷰 모드: $MODE"
+
+if [ "$MODE" = "full" ]; then
   # ── 전체 리뷰 (v2 와 동일 스키마) ──────────────────────────
   claude -p $MARGS --output-format json --settings "$DENY" \
     --append-system-prompt "$(skill_prompt review)" \
@@ -70,7 +78,7 @@ jq -e . REVIEW.json >/dev/null 2>&1 || { echo "리뷰 결과가 JSON 이 아니�
 # ── 원장 반영 — append 는 코드만, 검증 위반은 판정 불가(3) ────
 fail3() { printf '{"verdict":"undetermined","reason":"%s"}\n' "$1" > "$OUT"; exit 3; }
 
-if [ "$ROUND" -le 1 ] || ! jq -e 'has("resolved")' REVIEW.json >/dev/null 2>&1; then
+if [ "$MODE" = "full" ] || ! jq -e 'has("resolved")' REVIEW.json >/dev/null 2>&1; then
   # 전체 모드: findings 전부 등록
   jq -e '.findings|type=="array"' REVIEW.json >/dev/null 2>&1 || fail3 "no_findings_array"
   while IFS= read -r f; do
