@@ -34,6 +34,19 @@ case "$rl" in
   *) echo "  ✖ 리뷰 루프 실행 실패 (exit $rl) — 루프가 돌지 않았습니다. 승인 전에 원인을 확인하세요." ;;
 esac
 echo
+# v4.1 자동 게이트 — 반영률 pass 이고 리뷰 루프가 must 0 으로 끝났을 때만 스스로 승인한다.
+# design 모드에서는 approve.sh 가 분해 게이트를 한 번 더 세우므로 여기서 따로 검사하지 않는다.
+if [ "$(st_gate)" = "auto" ]; then
+  covpass=$(jq -r '.pass // false' .mvp/design-check.json 2>/dev/null)
+  if [ "$rl" -eq 0 ] && [ "$covpass" = "true" ]; then
+    echo "  ▣ 자동 승인 (gate=auto) — 기계 게이트 통과: 반영률 ${cov}% · must 0 · 리뷰 exit 0"
+    st_log "design_auto_gate_pass coverage=$cov"
+    exec "$P/bin/approve.sh"
+  fi
+  echo "  ⚠ 자동 승인 보류 — 기계 게이트 미통과 (반영률 pass=$covpass · 리뷰 exit $rl). 사람 승인 대기로 전환."
+  st_log "design_auto_gate_hold coverage=$cov review_exit=$rl"
+  echo
+fi
 echo "  ▣ 사람 승인 대기"
 echo "     내용을 확인하세요:  DESIGN.md"
 echo "     승인:  /mvp-builder:approve   (구현 시작)"

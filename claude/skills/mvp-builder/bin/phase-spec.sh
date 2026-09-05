@@ -5,7 +5,7 @@ P="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 . "$P/bin/state.sh"
 
 # 속도 프로필(--fast/--profile)과 실행 모드(--mode build|design)를 아이디어 앞에 붙인다
-PROFILE="standard"; MODE="build"; SKILLS="full"
+PROFILE="standard"; MODE="build"; SKILLS="full"; GATE="human"
 while [ $# -gt 0 ]; do
   case "$1" in
     --lite)    SKILLS="lite"; shift ;;
@@ -15,6 +15,7 @@ while [ $# -gt 0 ]; do
     --profile) PROFILE="${2:-}"; shift 2 ;;
     --mode)    MODE="${2:-build}"; shift 2 ;;
     --design)  MODE="design"; shift ;;
+    --auto-approve) GATE="auto"; shift ;;
     *) break ;;
   esac
 done
@@ -32,9 +33,11 @@ st_init "$IDEA"
 st_set profile "$PROFILE"
 st_set mode "$MODE"
 st_set skills "$SKILLS"
+st_set gate "$GATE"
 MARGS=$(model_args)
 echo "  스킬: $SKILLS — $([ "$SKILLS" = "lite" ] && echo '단계별 기본 프롬프트 (가벼움)' || echo '내장 agent-skills (양식 강제)')"
 [ "$MODE" = "design" ] && echo "  모드: design — 하이레벨 설계까지만 진행하고 하위 프로젝트로 분해한다"
+[ "$GATE" = "auto" ] && echo "  게이트: auto — 기계 게이트를 통과한 단계는 스스로 승인한다 (미통과는 사람 대기)"
 
 [ "$PROFILE" = "standard" ] || echo "  프로필: $PROFILE (claude ${MARGS:-기본} · 설계 $(budget design_rounds)라운드 · 리뷰 상한 $(budget review_max_attempts)회)"
 echo "▶ 1단계 스펙 작성"
@@ -76,6 +79,16 @@ st_log "spec_written ids=$n"
 echo
 echo "  SPEC.md 작성 완료 — 수용 기준 ${n}건"
 echo
+# v4.1 자동 게이트 — 수용 기준이 1건 이상이면 스스로 승인하고 설계로 넘어간다
+if [ "$(st_gate)" = "auto" ]; then
+  if [ "$n" -ge 1 ]; then
+    echo "  ▣ 자동 승인 (gate=auto) — 기계 게이트 통과: 수용 기준 ${n}건"
+    st_log "spec_auto_gate_pass ids=$n"
+    exec "$P/bin/approve.sh"
+  fi
+  echo "  ⚠ 자동 승인 보류 — 수용 기준 ID 가 0건. 사람 승인 대기로 전환."
+  st_log "spec_auto_gate_hold ids=$n"
+fi
 echo "  ▣ 사람 승인 대기"
 echo "     내용을 확인하세요:  SPEC.md"
 echo "     승인:  /mvp-builder:approve"

@@ -41,12 +41,16 @@ prompts/
 ## 2. 사용
 
 ```
-/mvp-builder:start [--lite | --full] [--fast | --profile 이름] [--mode design] <아이디어>
+/mvp-builder:start [--lite | --full] [--fast | --profile 이름] [--mode design] [--auto-approve] <아이디어>
 ```
 
 - `--lite` — 가볍게. 작은 프로젝트(단일 파일 앱, CLI, 게임 한 판)는 이걸 쓴다
 - `--full` — 기본값. 내장 agent-skills 로 v3 와 같은 양식을 강제한다. 큰 시스템 설계(`--mode design`)에 권한다
 - `--fast` 는 별개 축이다(모델·노력·라운드 예산). `--lite --fast` 가 가장 싸고, `--full` 만 주면 v3 와 동일하게 돈다
+- `--auto-approve` (v4.1) — **자동 게이트**. 기계 게이트를 통과한 단계만 스스로 승인한다: 스펙은 수용 기준 ID 1건 이상,
+  설계는 반영률 pass + 리뷰 루프 exit 0(must 0). 미통과·판정 불가·실행 실패는 기본(human)과 똑같이 멈춘다.
+  `.mvp/state.json` 의 `gate` 필드(`human`|`auto`), 이력에 `*_auto_gate_pass` / `*_auto_gate_hold` 가 남는다.
+  무인 실행·스크립트용이다. 사람이 보고 결정하는 장면이 필요하면 붙이지 않는다
 - 스킬 모드는 `.mvp/state.json` 의 `skills` 필드에 기록되고 `/mvp-builder:status` 에 보인다
 
 ## 3. v3 에서 바뀐 파일
