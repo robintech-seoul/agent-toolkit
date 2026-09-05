@@ -8,6 +8,7 @@ echo "현재 단계   : $(st_get phase)"
 echo "프로필      : $(st_profile)"
 echo "모드        : $(st_mode)"
 echo "스킬        : $(st_skills)"
+echo "게이트      : $(st_gate)"
 echo
 echo "경로:"
 if [ "$(st_mode)" = "design" ]; then

@@ -1,7 +1,7 @@
 {
   "name": "mvp-builder",
-  "version": "0.4.0",
-  "description": "아이디어에서 MVP까지 — v4. v3(원장 기반 델타 리뷰)에 스킬 모드를 더했다: agent-skills 를 플러그인 안에 내장해 외부 설치 없이 돌고(full), --lite 를 주면 단계별 기본 프롬프트(스펙·설계·리뷰·계획·구현)만으로 가볍게 돈다.",
+  "version": "0.4.1",
+  "description": "아이디어에서 MVP까지 — v4. v3(원장 기반 델타 리뷰)에 스킬 모드를 더했다: agent-skills 를 플러그인 안에 내장해 외부 설치 없이 돌고(full), --lite 를 주면 단계별 기본 프롬프트(스펙·설계·리뷰·계획·구현)만으로 가볍게 돈다. v4.1: --auto-approve — 기계 게이트를 통과한 단계만 자동 승인.",
   "author": {
     "name": "RobinTech"
   },

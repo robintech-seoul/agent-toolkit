@@ -64,3 +64,11 @@ skill_prompt() {  # $1=단계(spec|design|design-highlevel|review|plan|build) �
 # build(기본): 스펙→설계→구현 전체. design: 하이레벨 설계까지만 — 종료 상태 designed.
 st_mode() { local m; m=$(st_get mode 2>/dev/null)
             { [ -z "$m" ] || [ "$m" = "null" ]; } && m="build"; echo "$m"; }
+
+# ── 게이트 모드 (v4.1) ─────────────────────────────────────────
+# human(기본): 단계 끝마다 사람 승인을 기다린다.
+# auto:        기계 게이트가 통과한 단계만 스스로 승인해 다음 단계로 간다.
+#              스펙 = 수용 기준 ID 1건 이상. 설계 = 반영률 pass 이고 리뷰 루프 exit 0(must 0).
+#              미통과·판정 불가·실행 실패는 human 과 똑같이 멈춘다 — 자동은 "깨끗한 것만" 통과시킨다.
+st_gate() { local g; g=$(st_get gate 2>/dev/null)
+            { [ -z "$g" ] || [ "$g" = "null" ]; } && g="human"; echo "$g"; }
