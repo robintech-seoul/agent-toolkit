@@ -20,6 +20,11 @@
       "name": "code-wiki",
       "source": "./claude/skills/code-wiki",
       "description": "Build and maintain a hierarchical, LLM-generated wiki over a codebase — leaf folders summarize their files, parents synthesize their children, topic pages capture cross-cutting concerns, and sync keeps it current with the source tree."
+    },
+    {
+      "name": "mvp-builder",
+      "source": "./claude/skills/mvp-builder",
+      "description": "아이디어 한 줄에서 MVP까지 — 스펙 → 승인 → 설계·리뷰 루프 → 승인 → 구현. 발견 원장 기반 델타 리뷰, 기계 게이트, 내장 agent-skills(full) 또는 가벼운 기본 프롬프트(--lite). Idea to MVP: spec → approval → design/review loops → approval → build, with ledger-based delta review and machine gates."
     }
   ]
 }

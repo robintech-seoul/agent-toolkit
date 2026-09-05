@@ -1,0 +1,5 @@
+key	value
+design_rounds	2
+review_max_attempts	5
+review_max_stall	2
+build_rounds	3
