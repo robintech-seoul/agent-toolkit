@@ -1,0 +1,22 @@
+{
+  "name": "mvp-builder",
+  "version": "0.1.0+codex.20260912114401",
+  "description": "Program-driven MVP pipeline for Codex: spec, approvals, design and delta-review loops, implementation and machine gates.",
+  "author": {
+    "name": "RobinTech"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "MVP Builder",
+    "shortDescription": "Idea to MVP with approvals and verified gates",
+    "longDescription": "Codex port of Claude MVP-Builder 0.4.2. A local program owns state, approvals and review findings; Codex performs individual generation and review nodes.",
+    "developerName": "RobinTech",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": [
+      "Start an MVP from my idea",
+      "Show the current MVP pipeline status"
+    ]
+  },
+  "repository": "https://github.com/robintech-seoul/agent-toolkit"
+}

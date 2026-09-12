@@ -1,0 +1,5 @@
+interface:
+  display_name: "MVP Builder approve"
+  short_description: "Run the program-owned MVP pipeline command"
+policy:
+  allow_implicit_invocation: false

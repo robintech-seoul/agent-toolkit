@@ -1,0 +1,6 @@
+profile	key	value
+fast	effort	low
+fast	design_rounds	1
+fast	review_max_attempts	1
+fast	review_max_stall	1
+fast	build_rounds	2
