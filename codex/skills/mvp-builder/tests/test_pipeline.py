@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import tempfile
+import sys
 import unittest
 from pathlib import Path
 
@@ -44,6 +45,13 @@ class PipelineTests(unittest.TestCase):
         self.p.reject('please clarify'); self.assertEqual(self.p.state['phase'],'spec_pending_approval')
         self.p.approve(); self.assertEqual(self.p.state['phase'],'design_pending_approval')
         self.assertNotIn('build',self.fake.calls)
+    def test_foreign_state_is_rejected_without_overwrite(self):
+        (self.root/'.mvp').mkdir()
+        statefile=self.root/'.mvp/state.json'; statefile.write_text('{"phase":"spec_pending_approval"}')
+        before=statefile.read_bytes()
+        with self.assertRaises(m.PipelineError): m.Pipeline(self.root)
+        self.assertEqual(statefile.read_bytes(),before)
+
     def test_existing_run_not_overwritten(self):
         self.start(); before=(self.root/'.mvp/state.json').read_bytes()
         with self.assertRaises(m.PipelineError): self.start()
@@ -80,7 +88,6 @@ class PipelineTests(unittest.TestCase):
             self.p.apply_review({'resolved':['L-999'],'unresolved':[],'new':[]},1,True)
         self.assertEqual(self.p.ledger(),[])
 
-if __name__=='__main__': unittest.main()
 
 class RunnerTests(unittest.TestCase):
     def setUp(self):
@@ -99,6 +106,14 @@ class RunnerTests(unittest.TestCase):
         self.assertTrue((self.root/'add.py').exists())
         self.assertTrue((self.root/'.mvp/test.log').exists())
         self.assertGreaterEqual(len(list((self.root/'.mvp/calls').glob('*/events.jsonl'))),5)
+    def test_build_dependencies_survive_until_gate_then_cleanup(self):
+        import os
+        os.environ['MVP_TEST_SCENARIO']='dependency'
+        self.p.start('test',skills='lite',gate='auto',profile='fast')
+        self.assertEqual(self.p.state['phase'],'built')
+        self.assertFalse((self.root/'node_modules').exists())
+        self.assertIsNone(self.p.invoke.build_workspace)
+
     def test_failures_never_write_spec(self):
         import os
         for scenario in ('exit','missing','invalid','timeout'):
@@ -123,3 +138,59 @@ class RunnerTests(unittest.TestCase):
         self.p.start('test',skills='lite',gate='auto',profile='fast')
         self.assertEqual(self.p.state['phase'],'build_incomplete')
         self.assertIn('A1',(self.root/'SPEC.md').read_text())
+
+class GateTests(unittest.TestCase):
+    setUp = PipelineTests.setUp
+    tearDown = PipelineTests.tearDown
+    start = PipelineTests.start
+    def test_auto_holds_on_review_budget_exhaustion(self):
+        self.fake.reviews=[{'findings':[{'severity':'must','where':'A1','summary':'missing','why':'contract','fix':'add'}]}]
+        self.start(gate='auto',profile='fast')
+        self.assertEqual(self.p.state['phase'],'design_pending_approval')
+        self.assertEqual(self.p.state['review_verdict'],'exhausted')
+        self.assertNotIn('build',self.fake.calls)
+    def test_deadlock_uses_finding_ids(self):
+        f={'severity':'must','where':'A1','summary':'missing','why':'contract','fix':'add'}
+        delta={'resolved':[],'unresolved':[{'id':'L-001','note':'still missing'}],'new':[]}
+        self.fake.reviews=[{'findings':[f]},delta,delta]
+        self.start(); self.p.approve()
+        self.assertEqual(self.p.state['review_verdict'],'deadlock')
+        self.assertEqual(self.p.state['rounds']['review'],3)
+    def test_auto_holds_with_zero_spec_ids(self):
+        self.p.invoke=lambda *a,**kw:{'content':'# No acceptance IDs'}
+        self.start(gate='auto')
+        self.assertEqual(self.p.state['phase'],'spec_pending_approval')
+    def test_partial_delta_does_not_close_anything(self):
+        self.start(); f={'severity':'must','where':'A1','summary':'missing','why':'contract','fix':'add'}
+        self.p.apply_review({'findings':[f,f]},1,False)
+        before=self.p.ledger()
+        with self.assertRaises(m.PipelineError): self.p.apply_review({'resolved':['L-001'],'unresolved':[],'new':[]},2,True)
+        self.assertEqual(self.p.ledger(),before)
+    def test_full_design_prompt_is_available(self):
+        self.p.start('Modules and features',mode='design',gate='auto')
+        self.assertEqual(self.p.state['phase'],'designed')
+    def test_existing_design_is_not_reused_for_new_idea(self):
+        (self.root/'DESIGN.md').write_text('# Unrelated legacy design\nA1\n')
+        self.start(); self.p.approve()
+        self.assertIn('design',self.fake.calls)
+        self.assertNotIn('Unrelated legacy',(self.root/'DESIGN.md').read_text())
+
+class CLITests(unittest.TestCase):
+    def test_multiline_idea_file_and_lock(self):
+        import os, subprocess, fcntl
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t); idea=root/'idea.txt'; idea.write_text('Line one\n$(touch BAD) [a|b] <x>')
+            env={**os.environ,'MVP_CODEX_BIN':str(ROOT/'tests/fake_codex.py')}
+            cmd=[sys.executable,str(ROOT/'bin/pipeline.py'),'--project',t]
+            run=subprocess.run(cmd+['start','--lite','--idea-file',str(idea)],env=env,capture_output=True,text=True)
+            self.assertEqual(run.returncode,0,run.stderr)
+            state=json.loads((root/'.mvp/state.json').read_text())
+            self.assertEqual(state['idea'],idea.read_text()); self.assertFalse((root/'BAD').exists())
+            with (root/'.mvp/lock').open('w') as lock:
+                fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                status=subprocess.run(cmd+['status'],env=env,capture_output=True,text=True)
+                self.assertEqual(status.returncode,0)
+                blocked=subprocess.run(cmd+['approve'],env=env,capture_output=True,text=True)
+                self.assertNotEqual(blocked.returncode,0); self.assertIn('Another pipeline',blocked.stderr)
+
+if __name__=='__main__': unittest.main()

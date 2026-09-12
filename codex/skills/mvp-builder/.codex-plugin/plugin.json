@@ -1,6 +1,6 @@
 {
   "name": "mvp-builder",
-  "version": "0.1.0",
+  "version": "0.1.0+codex.20260912114401",
   "description": "Program-driven MVP pipeline for Codex: spec, approvals, design and delta-review loops, implementation and machine gates.",
   "author": {
     "name": "RobinTech"

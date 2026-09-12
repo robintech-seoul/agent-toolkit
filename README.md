@@ -1,20 +1,21 @@
 # RobinTech agent toolkit
 
-Agent tooling RobinTech builds and uses. One repo, one marketplace, organized by
-the agent it targets — so adding support for another agent later does not mean
-another marketplace to install.
+Agent tooling RobinTech builds and uses. One repository, platform-specific marketplaces, organized by the agent each tool targets.
 
 ```
 claude/
 ├── plugins/   product tooling — tied to a RobinTech product
 └── skills/    general-purpose skills — work on any codebase, any stack
+codex/
+└── skills/    Codex packages (currently mvp-builder)
 ```
 
 Everything under `claude/` installs through a single Claude Code marketplace,
-**`robintech`**. Support for other agents gets its own top-level directory
-alongside `claude/`.
+**`robintech`**. Codex packages live under `codex/` and use the **`robintech-codex`** catalog at `.agents/plugins/marketplace.json`.
 
 ## Install
+
+### Claude Code
 
 ```bash
 # add the marketplace once, then install what you want from it
@@ -24,6 +25,24 @@ alongside `claude/`.
 
 (or via the CLI: `claude plugin marketplace add robintech-seoul/agent-toolkit`
 then `claude plugin install arch-explorer@robintech`.)
+
+### Codex
+
+From a local checkout containing the Codex port:
+
+```bash
+codex plugin marketplace add /absolute/path/to/agent-toolkit
+codex plugin add mvp-builder@robintech-codex
+```
+
+See [Codex setup](./codex/README.md) and [MVP-Builder usage](./codex/skills/mvp-builder/README.md). Remote installation requires this change to be published first.
+
+| Tool | Claude Code | Codex |
+|---|---|---|
+| mvp-builder | Supported | Supported by this port |
+| arch-explorer | Supported | Not ported here |
+| code-wiki | Supported | Not ported here |
+| robin-cloud-onboarding | Supported | Not ported here |
 
 ## What's here
 
@@ -35,6 +54,10 @@ then `claude plugin install arch-explorer@robintech`.)
 | [`robin-cloud-onboarding`](./claude/plugins/robin-cloud-onboarding) | Onboard a repo to [Robin-Cloud](https://robin-cloud.com) end-to-end — generate Dockerfiles + a keyless CI workflow + nginx, then drive the console setup (GitHub App, ECR, deploy config, DB, custom domain + TLS) with verified checkpoints. No cluster access needed. |
 
 ## Adding to the marketplace
+
+Codex packages use `.codex-plugin/plugin.json`, `skills/<name>/SKILL.md`, and a root `.agents/plugins/marketplace.json` entry pointing to the package. Keep platform-specific runtime files inside the package so installation remains self-contained. See [Codex packages](./codex/skills/README.md).
+
+### Claude Code packaging
 
 Claude Code installs **plugins**, so everything here — including a lone skill —
 ships as a plugin directory listed in

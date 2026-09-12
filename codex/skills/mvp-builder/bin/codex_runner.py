@@ -66,6 +66,13 @@ class CodexRunner:
     def __init__(self, root, settings):
         self.root = Path(root).resolve()
         self.settings = settings
+        self.build_workspace = None
+        self._staging = None
+
+    def cleanup(self):
+        if self._staging: self._staging.cleanup()
+        self._staging = None
+        self.build_workspace = None
 
     def __call__(self, stage, prompt, *, schema='document', instructions=''):
         logdir=self.root/'.mvp/calls'/f'{time.time_ns()}-{stage}'
@@ -88,8 +95,10 @@ class CodexRunner:
         args += ['-']
         atomic_json(logdir/'request.json',{'stage':stage,'prompt':full_prompt,'argv':args})
         staging=None
+        keep_staging=False
         try:
             if stage=='build':
+                self.cleanup()
                 before=inventory(self.root)
                 staging=tempfile.TemporaryDirectory(prefix='mvp-codex-build-')
                 work=Path(staging.name)/'work'
@@ -122,8 +131,11 @@ class CodexRunner:
                     shutil.copy2(work/name,dest)
                 for name in deleted: (self.root/name).unlink()
                 atomic_json(logdir/'changes.json',{'changed':changed,'deleted':deleted})
+                self._staging=staging
+                self.build_workspace=work
+                keep_staging=True
             return result
         except (OSError,ValueError) as e:
             raise PipelineError(f'Codex invocation failed: {e}; see {logdir}') from e
         finally:
-            if staging: staging.cleanup()
+            if staging and not keep_staging: staging.cleanup()

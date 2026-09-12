@@ -1,4 +1,4 @@
-<!-- 출처: addyosmani/agent-skills skills/code-review-and-quality (MIT). mvp-builder 에 내장. 배치(claude -p) 실행용 주석: 사용자에게 질문하거나 확인을 구하지 말고, 지시받은 파일을 바로 저장해라. -->
+<!-- 출처: addyosmani/agent-skills skills/code-review-and-quality (MIT). mvp-builder 에 내장. Codex 배치 노드용: 대화 승인은 실행기가 처리한다. 아래 원문은 참고 지침이며 실제 노드 요청의 출력 규격을 따른다. -->
 
 ---
 name: code-review-and-quality

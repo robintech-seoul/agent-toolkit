@@ -11,6 +11,7 @@ import re
 import sys
 import shutil
 import tempfile
+from contextlib import nullcontext
 import time
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from codex_runner import CodexRunner, PipelineError, atomic_json, digest, inventory, run_process
@@ -26,7 +27,10 @@ def contains(text, identifier):
 class Pipeline:
     def __init__(self,root,invoke=None):
         self.root=Path(root).resolve(); self.meta=self.root/'.mvp'; self.file=self.meta/'state.json'
+        if self.meta.is_symlink() or self.file.is_symlink(): raise PipelineError('Control paths must not be symlinks')
         self.state=json.loads(self.file.read_text()) if self.file.exists() else {}
+        if self.file.exists() and (not isinstance(self.state,dict) or self.state.get('engine')!='codex' or self.state.get('version')!=1):
+            raise PipelineError('Unsupported state format; use a separate project for this Codex port')
         self.invoke=invoke or CodexRunner(self.root,self.state.get('settings',{}))
 
     def save(self): atomic_json(self.file,self.state)
@@ -164,7 +168,7 @@ class Pipeline:
             for _ in range(self.state['settings']['design_rounds']):
                 self.contract_check()
                 r=self.state['rounds'].get('design',0)+1; self.state['rounds']['design']=r; self.save()
-                existing=(self.root/'DESIGN.md').exists()
+                existing=r>1 and (self.root/'DESIGN.md').exists()
                 check=self.design_check() if existing else None
                 if check and check['pass']: self.event('design_generation_skipped',round=r)
                 else:
@@ -273,15 +277,22 @@ class Pipeline:
             # Tests are generated code too: run them in a disposable project copy.
             # This isolates relative file writes, not arbitrary hostile code; see README.
             from codex_runner import ignored
-            with tempfile.TemporaryDirectory(prefix='mvp-codex-test-') as temp:
-                work=Path(temp)/'work'
-                shutil.copytree(self.root,work,ignore=lambda _,names:[n for n in names if ignored(n)])
+            prepared=getattr(self.invoke,'build_workspace',None)
+            context=nullcontext(None) if prepared else tempfile.TemporaryDirectory(prefix='mvp-codex-test-')
+            with context as temp:
+                work=prepared or Path(temp)/'work'
+                if not prepared:
+                    shutil.copytree(self.root,work,ignore=lambda _,names:[n for n in names if ignored(n)])
+                before_tests=inventory(work)
+                local_python=work/'.venv/bin/python'
+                if command[0]==sys.executable and local_python.exists(): command[0]=str(local_python)
                 with (self.meta/'test.log').open('w') as log:
                     rc=run_process(command,cwd=work,stdout=log,stderr=log,timeout=self.state['settings']['timeout'])
                 for name,expected in self.state.get('contracts',{}).items():
                     path=work/name
                     if not path.is_file() or path.is_symlink() or digest(path)!=expected: test_contract='modified'
                 if (work/'.mvp').exists(): test_contract='modified'
+                if inventory(work)!=before_tests: test_contract='modified'
                 if 'unittest' in command and re.search(r'Ran 0 tests', (self.meta/'test.log').read_text()): rc=99
         contract=test_contract
         try: self.contract_check()
@@ -306,6 +317,8 @@ class Pipeline:
             self.phase('build_incomplete'); self.event('build_incomplete')
         except PipelineError:
             self.phase('build_failed'); raise
+        finally:
+            if isinstance(self.invoke,CodexRunner): self.invoke.cleanup()
 
 
 def main():

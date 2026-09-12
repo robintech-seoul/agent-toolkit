@@ -17,7 +17,7 @@
 - 총 **25건 이하**. 기준 하나는 한 문장이고 관측 가능해야 한다("빠르다" 금지, "1초 안에 응답" 가능)
 - 완료 게이트는 각 ID 가 테스트 파일(`*test*` 이름)에 등장하는지 grep 한다.
   자동 기준은 테스트 이름에 ID 를 넣고, 수동 기준은 `test/manual-tests.md` 체크리스트에 ID 를 적는다고 5절과 파일 구조에 명시해라
-- 테스트 러너는 게이트가 `package.json` 의 `npm test` 또는 pytest 로만 감지한다. 둘 중 하나를 3절에 확정해라
+- 테스트 러너는 프로젝트 스택에 맞춘다: JavaScript/TypeScript는 package.json의 npm test, Python은 pytest 또는 표준 라이브러리 unittest. Python unittest만 쓰는 프로젝트에 npm이나 pytest 의존성을 추가하지 마라
 
 ## 길이
 전체 150줄 이하. 코드 스니펫은 실행 명령과 핵심 인터페이스 시그니처만. 코드는 아직 만들지 않는다.

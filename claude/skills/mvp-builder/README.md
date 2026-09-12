@@ -1,5 +1,7 @@
 # mvp-builder — 아이디어 한 줄에서 MVP까지 (v4 · 스킬 모드: 내장 agent-skills / lite)
 
+Codex용은 [MVP-Builder for Codex](../../../codex/skills/mvp-builder/README.md)를 참고하세요. 이 디렉터리는 기존 Claude Code판입니다.
+
 > **이 판은 v4 다.** 강의 저장소의 `mvp_building/graph/mvp-builder-4` 를 `mvp-builder` 라는 이름으로 마켓플레이스에 올린 것이다. 이전 판(v1~v3)은 강의 저장소에만 있다.
 >
 > **왜 v4 인가.** v3 의 갤러그 런(2026-09-04)은 게임 한 판을 위해 코드 이전에 문서 약 1,500줄

@@ -1,0 +1,20 @@
+{
+  "name": "robintech-codex",
+  "interface": {
+    "displayName": "RobinTech Codex"
+  },
+  "plugins": [
+    {
+      "name": "mvp-builder",
+      "source": {
+        "source": "local",
+        "path": "./codex/skills/mvp-builder"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

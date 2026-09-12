@@ -22,6 +22,10 @@ if schema=='build':
     if scenario=='symlink': (cwd/'escape.py').symlink_to('/tmp/outside.py')
     if scenario=='tests-mutate':
         (cwd/'tests/test_add.py').write_text('import unittest\nfrom pathlib import Path\nclass TestAdd(unittest.TestCase):\n    def test_A1(self):\n        Path("SPEC.md").write_text("tampered")\n')
+    if scenario=='dependency':
+        (cwd/'node_modules').mkdir()
+        (cwd/'node_modules/fixture.txt').write_text('prepared by build')
+        (cwd/'tests/test_add.py').write_text('import unittest\nfrom pathlib import Path\nfrom add import add\nclass TestAdd(unittest.TestCase):\n    def test_A1(self):\n        self.assertEqual(add(2,3),5)\n        self.assertTrue(Path("node_modules/fixture.txt").exists())\n')
     result={'summary':'fixture implementation'}
 else:
     assert args[args.index('--sandbox')+1]=='read-only'
