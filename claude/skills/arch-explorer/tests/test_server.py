@@ -265,6 +265,174 @@ class CodexServerTest(ServerTest):
         self.assertEqual(ev[-1]["type"], "error")
 
 
+DIFF_HTML = ("<html><body><script>const MODEL={root:{nodes:[{id:'a',change:'modified'}]}};"
+             "const CHANGES={blocks:[]}</script></body></html>")
+
+
+class DiffServerTest(unittest.TestCase):
+    """A change map: forks of the build session, its range in the prompt, the fallback."""
+    engine = "claude"
+
+    def setUp(self):
+        import diff_session
+        self.repo = Repo()
+        self.repo.write("src/a.py", "a = 1\n")
+        self.main = self.repo.commit("init")
+        self.repo.git("checkout", "-q", "-b", "feature")
+        self.repo.write("src/a.py", "a = 2\n")
+        self.repo.commit("change")
+        self.rt = tempfile.TemporaryDirectory()
+        with mock.patch.object(diff_session, "runtime_dir", lambda: Path(self.rt.name)):
+            self.rng = diff_session.resolve(self.repo.root, cwd=self.repo.root, save_to="")
+        self.map = Path(self.rng["out"])
+        self.map.parent.mkdir(parents=True)
+        self.map.write_text(DIFF_HTML)
+        diff_session.record(self.rng, session="build-sess", engine="claude")
+        self.bins = fake_bin()
+        self.log = Path(tempfile.mkstemp()[1])
+        self.env = mock.patch.dict(os.environ, {
+            "PATH": path_with(self.bins.name), "FAKE_LOG": str(self.log), "FAKE_MODE": "ok"})
+        self.env.start()
+        self.srv = chat_server.ChatServer(self.repo.root, self.map, self.engine, 0, timeout=30)
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+        self.env.stop()
+        self.bins.cleanup()
+        self.log.unlink(missing_ok=True)
+        self.rt.cleanup()
+        self.repo.cleanup()
+
+    request = ServerTest.request  # the same HTTP and fake-engine helpers
+    calls = ServerTest.calls
+
+    def authed(self):
+        return {"Cookie": f"{self.srv.cookie}={self.srv.token}",
+                "Origin": f"http://127.0.0.1:{self.srv.port}"}
+
+    def ask(self, question="q", conv="c1", context=None):
+        _, raw = self.request("POST", "/api/ask",
+                              {"conversation": conv, "question": question, "context": context},
+                              self.authed())
+        return [json.loads(l) for l in raw.decode().splitlines() if l.strip()]
+
+    def status(self):
+        _, raw = self.request("GET", "/api/status", headers=self.authed())
+        return json.loads(raw)
+
+    def test_conversations_fork_the_build_session(self):
+        ev = self.ask()
+        self.assertEqual(ev[-1]["type"], "final")
+        first = self.calls()[0]["argv"]
+        self.assertEqual(first[first.index("--resume") + 1], "build-sess")
+        self.assertIn("--fork-session", first)
+        self.assertEqual(first[first.index("--permission-mode") + 1], "dontAsk")
+        rules = first[first.index("--append-system-prompt") + 1]
+        self.assertIn("You answer questions about this repository", rules)
+        self.assertIn("## This is a change map", rules)
+
+        self.ask("again")
+        second = self.calls()[1]["argv"]
+        fork_id = second[second.index("--resume") + 1]
+        self.assertTrue(fork_id.startswith("sess-fork-"))
+        self.assertNotIn("--fork-session", second)
+
+        self.ask(conv="c2")  # another conversation forks the build again
+        third = self.calls()[2]["argv"]
+        self.assertEqual(third[third.index("--resume") + 1], "build-sess")
+        self.assertIn("--fork-session", third)
+
+    def test_prompt_carries_the_range(self):
+        self.ask(context={"view": {"id": "root", "title": "Root"},
+                          "node": {"id": "a", "title": "A", "change": "modified"},
+                          "block": {"summary": "a is two now", "features": ["bump a"]},
+                          "changes": {"nodes": [{"id": "a", "change": "modified"}], "edges": []}})
+        stdin = self.calls()[0]["stdin"]
+        self.assertTrue(stdin.startswith("[change range] this map shows what `feature` "
+                                         "changed against `main`."))
+        self.assertIn(f"merge-base: {self.main}", stdin)
+        self.assertIn(f"`git diff {self.main} {self.rng['after']} -- <path>`", stdin)
+        self.assertIn("code after the change: the work tree", stdin)
+        self.assertIn("for code the diff does not touch (even in a changed file): read the wiki",
+                      stdin)
+        self.assertIn("selected box: a — A [modified]", stdin)
+        self.assertIn("change block of the selected box: a is two now", stdin)
+        self.assertIn("changed on this layer: box a [modified]", stdin)
+        self.assertNotIn("[build context] none", stdin)
+
+    def test_head_not_checked_out_reads_after_side_from_git(self):
+        self.repo.git("checkout", "-q", "main")
+        self.ask()
+        self.assertIn(f"`git show {self.rng['head_sha']}:<path>` (the work tree is not at head)",
+                      self.calls()[0]["stdin"])
+
+    def test_missing_build_session_falls_back(self):
+        with mock.patch.dict(os.environ, {"FAKE_MODE": "noresume"}):
+            ev = self.ask()
+            self.assertEqual([e["type"] for e in ev][:1], ["notice"])
+            self.assertEqual(ev[0]["code"], "no-build-context")
+            self.assertEqual(ev[-1]["type"], "final")
+            first, retry = self.calls()
+            self.assertIn("--fork-session", first["argv"])
+            self.assertNotIn("--resume", retry["argv"])
+            self.assertIn("[build context] none", retry["stdin"])
+            self.assertFalse(self.status()["diff"]["build_context"])
+            self.ask(conv="c2")  # no second attempt at the gone session
+            self.assertNotIn("--resume", self.calls()[2]["argv"])
+
+    def test_rebuilt_map_brings_a_new_session(self):
+        import diff_session
+        with mock.patch.dict(os.environ, {"FAKE_MODE": "noresume"}):
+            self.ask()
+        diff_session.record(self.rng, session="build-2", engine="claude")
+        self.assertTrue(self.status()["diff"]["build_context"])
+        self.ask(conv="c2")
+        argv = self.calls()[-1]["argv"]
+        self.assertEqual(argv[argv.index("--resume") + 1], "build-2")
+
+    def test_status(self):
+        s = self.status()
+        self.assertEqual(s["kind"], "diff")
+        self.assertEqual(s["map"]["state"], "fresh")
+        self.assertEqual(s["diff"], {"head": "feature", "base": "main", "mb": self.main,
+                                     "uncommitted": False, "build_context": True})
+
+    def test_map_without_session_answers_without_build_context(self):
+        import diff_session
+        diff_session.record(self.rng)  # built in the user's own session
+        self.ask()
+        call = self.calls()[0]
+        self.assertNotIn("--resume", call["argv"])
+        self.assertIn("[build context] none", call["stdin"])
+
+
+class CodexDiffServerTest(DiffServerTest):
+    engine = "codex"
+
+    def test_conversations_fork_the_build_session(self):
+        self.ask()
+        call = self.calls()[0]
+        self.assertNotIn("resume", call["argv"])
+        self.assertIn("## This is a change map", call["stdin"])
+        self.assertIn("[build context] none", call["stdin"])
+        self.assertFalse(self.status()["diff"]["build_context"])
+
+    def test_prompt_carries_the_range(self):
+        self.ask()
+        self.assertIn("[change range] this map shows what `feature`", self.calls()[0]["stdin"])
+
+    def test_missing_build_session_falls_back(self):
+        pass  # codex never resumes the build session
+
+    def test_rebuilt_map_brings_a_new_session(self):
+        pass
+
+    def test_status(self):
+        self.assertFalse(self.status()["diff"]["build_context"])
+
+
 class LaunchTest(unittest.TestCase):
     """The real detached process: launch, reuse, engine switch, stop."""
 

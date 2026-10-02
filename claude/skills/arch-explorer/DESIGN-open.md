@@ -7,6 +7,7 @@ open은 띄우기 전에 지도와 wiki가 최신인지 보고, 없거나 낡았
 
 대상 버전: arch-explorer 0.2.0 → 0.3.0
 범위 밖: `/arch-explorer:diff`로 만든 HTML. open은 build 지도만 연다.
+(0.4.0에서 변경 지도도 열게 됐다. `DESIGN-diff-open.md` 참고.)
 
 ---
 

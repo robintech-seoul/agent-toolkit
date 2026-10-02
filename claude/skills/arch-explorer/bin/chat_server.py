@@ -14,6 +14,14 @@ The map file on disk is never modified: the panel (`assets/chat-panel.html`)
 is inserted before `</body>` as the page is served. Questions run the chosen
 engine headless and read-only (see engines.py) in the repo root.
 
+A change map (one with a `<stem>.arch-explorer.json` sidecar, see
+diff_session.py) is answered with `answer-rules-diff.md` added to the rules
+and the change range in every prompt. When its sidecar records the session
+that built it and the engine is claude, each conversation starts as a fork of
+that session (`--resume <build> --fork-session`), so it answers from the
+build's analysis; the build session itself is never changed. If that session
+is gone, the conversation falls back to answering without it, and says so.
+
 Security: binds 127.0.0.1 only; rejects foreign Host headers (DNS rebinding);
 every request needs the per-launch token, first as `/?t=<token>`, then as an
 HttpOnly SameSite=Strict cookie; POSTs must come from the server's own Origin.
@@ -49,6 +57,7 @@ import status  # noqa: E402
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 PANEL_PATH = PLUGIN_ROOT / "assets" / "chat-panel.html"
 RULES_PATH = PLUGIN_ROOT / "assets" / "answer-rules.md"
+RULES_DIFF_PATH = PLUGIN_ROOT / "assets" / "answer-rules-diff.md"
 
 MAX_BODY = 256 * 1024
 MAX_QUESTION = 8000
@@ -117,16 +126,30 @@ def format_context(ctx) -> str:
             lines.append(f"layer hint: {view['hint']}")
     node = ctx.get("node") if isinstance(ctx.get("node"), dict) else None
     if node:
-        lines.append(f"selected box: {node.get('id')} — {node.get('title') or ''}".rstrip(" —"))
+        lines.append(f"selected box: {node.get('id')} — {node.get('title') or ''}".rstrip(" —")
+                     + _mark(node))
         for ln in (node.get("lines") or [])[:6]:
             lines.append(f"  {ln}")
+    block = ctx.get("block") if isinstance(ctx.get("block"), dict) else None
+    if block:
+        lines.append(f"change block of the selected box: {block.get('summary') or ''}")
+        for title in (block.get("features") or [])[:8]:
+            lines.append(f"  - {title}")
+    changes = ctx.get("changes") if isinstance(ctx.get("changes"), dict) else None
+    if changes:
+        marked = ([f"box {n.get('id')}{_mark(n)}" for n in changes.get("nodes") or []
+                   if isinstance(n, dict)]
+                  + [f"arrow {e.get('from')} → {e.get('to')}{_mark(e)}"
+                     for e in changes.get("edges") or [] if isinstance(e, dict)])
+        if marked:
+            lines.append("changed on this layer: " + ", ".join(marked[:30]))
     ifaces = ctx.get("ifaces") if isinstance(ctx.get("ifaces"), list) else []
     if ifaces:
         lines.append("interfaces on this layer:")
         for f in ifaces[:30]:
             if not isinstance(f, dict):
                 continue
-            lines.append(f"- {f.get('title')} ({f.get('from')} → {f.get('to')})")
+            lines.append(f"- {f.get('title')} ({f.get('from')} → {f.get('to')}){_mark(f)}")
             for it in (f.get("items") or [])[:4]:
                 if isinstance(it, dict):
                     lines.append(f"    {it.get('sig', '')}  @ {it.get('ref', '')}")
@@ -134,8 +157,17 @@ def format_context(ctx) -> str:
     return text if len(text) <= MAX_CONTEXT else text[:MAX_CONTEXT] + "\n…(truncated)"
 
 
+def _mark(item: dict) -> str:
+    """` [added]` for an element the change map marks, else nothing."""
+    change = item.get("change")
+    return f" [{change}]" if change in ("added", "modified", "removed") else ""
+
+
 def _wiki_status_line(wiki: dict, where: str = "") -> str | None:
     label = f"{where}: " if where else ""
+    if wiki.get("includes_branch"):
+        return (f"[wiki status] {label}the wiki was updated on this branch, after the "
+                f"merge-base: it may already describe some of the branch's changes.")
     if wiki.get("state") == "stale":
         return (f"[wiki status] {label}the wiki does not reflect {wiki.get('changed')} "
                 f"file(s) changed since {str(wiki.get('sha'))[:10]}.")
@@ -144,10 +176,39 @@ def _wiki_status_line(wiki: dict, where: str = "") -> str | None:
     return None
 
 
-def build_prompt(question: str, ctx, wiki: dict, wikis: list[dict] | None = None) -> str:
+def format_range(diff: dict, head_now: str | None, build_context: bool) -> str:
+    """The change map's range, and where to read each side of it."""
+    head, base, mb, after = diff.get("head"), diff.get("base"), diff.get("mb"), diff.get("after")
+    lines = [f"[change range] this map shows what `{head}` changed against `{base}`.",
+             f"merge-base: {mb}",
+             f"after: {after}" + (" (a snapshot of the work tree, uncommitted work included)"
+                                  if diff.get("uncommitted") else " (head's commit)"),
+             f"code before the change: `git show {mb}:<path>`",
+             f"hunks: `git diff {mb} {after} -- <path>`"]
+    if diff.get("uncommitted") or head_now == diff.get("head_sha"):
+        lines.append("code after the change: the work tree")
+    else:
+        lines.append(f"code after the change: `git show {diff.get('head_sha')}:<path>` "
+                     f"(the work tree is not at head)")
+    lines.append("for code the diff does not touch (even in a changed file): read the wiki "
+                 "first and cite it; do not answer it from memory of the build, and cite a "
+                 "source line of it only after opening that file in this conversation.")
+    if not build_context:
+        lines.append("[build context] none: this session did not build the map. Answer "
+                     "questions about the change from the change notes in [map context] "
+                     "and from git, and say that the build's analysis is not available.")
+    return "\n".join(lines)
+
+
+def build_prompt(question: str, ctx, wiki: dict, wikis: list[dict] | None = None,
+                 diff: dict | None = None, build_context: bool = True,
+                 head_now: str | None = None) -> str:
     """`wikis` (per-wiki status with `dir`) matters only when the wikis are not
-    the single one at the repo root: then the engine is told where they are."""
+    the single one at the repo root: then the engine is told where they are.
+    `diff` is a change map's sidecar: the range goes first."""
     parts = []
+    if diff:
+        parts.append(format_range(diff, head_now, build_context))
     block = format_context(ctx)
     if block:
         parts.append(block)
@@ -183,10 +244,41 @@ class ChatServer(ThreadingHTTPServer):
         self.convs: dict[str, dict] = {}
         self.lock = threading.Lock()
         self.verbose = False
+        # A change map: its sidecar, and the build session conversations fork.
+        self.diff = None
+        self.build_session = None
+        self.build_ok = True  # False once resuming the build session has failed
+        self.refresh_diff()
 
     @property
     def url(self) -> str:
         return f"http://127.0.0.1:{self.port}/?t={self.token}"
+
+    def refresh_diff(self) -> None:
+        """Re-read the sidecar: a rebuild of the map, served by this same
+        server, records a new build session."""
+        self.diff = status.load_diff_sidecar(self.map_path)
+        session = (self.diff or {}).get("session") if self.engine == "claude" else None
+        if session != self.build_session:
+            self.build_session, self.build_ok = session, True
+
+    @property
+    def build_context(self) -> bool:
+        return bool(self.build_session and self.build_ok)
+
+    def rules(self) -> str:
+        text = RULES_PATH.read_text(encoding="utf-8")
+        if self.diff:
+            text += "\n\n" + RULES_DIFF_PATH.read_text(encoding="utf-8")
+        return text
+
+    def status(self) -> dict:
+        self.refresh_diff()
+        out = status.check(self.root, self.map_path, self.wikis)
+        if self.diff:
+            out["diff"] = {k: self.diff.get(k) for k in ("head", "base", "mb", "uncommitted")}
+            out["diff"]["build_context"] = self.build_context
+        return out
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -273,14 +365,7 @@ class Handler(BaseHTTPRequestHandler):
                                     "map": str(self.server.map_path),
                                     "wikis": self.server.wikis})
         if url.path == "/api/status":
-            srv = self.server
-            wiki, wikis = status.wikis_status(srv.root, srv.wikis)
-            return self._json(200, {
-                "engine": srv.engine,
-                "map": status.map_status(srv.root, srv.map_path, srv.wikis),
-                "wiki": wiki,
-                "wikis": wikis,
-            })
+            return self._json(200, {"engine": self.server.engine, **self.server.status()})
         return self._json(404, {"error": "not found"})
 
     def do_POST(self):
@@ -327,7 +412,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"error": f"question longer than {MAX_QUESTION} characters"})
         srv = self.server
         with srv.lock:
-            conv = srv.convs.setdefault(conv_id, {"session": None, "busy": False})
+            conv = srv.convs.setdefault(conv_id, {"session": None, "busy": False,
+                                                  "fallback": False})
             if conv["busy"]:
                 return self._json(409, {"error": "a question is still running"})
             conv["busy"] = True
@@ -347,26 +433,50 @@ class Handler(BaseHTTPRequestHandler):
 
     def _run(self, conv: dict, question: str, ctx):
         srv = self.server
-        ad = engines.adapter(srv.engine, srv.root)
-        rules = RULES_PATH.read_text(encoding="utf-8")
-        prompt = build_prompt(question, ctx, *status.wikis_status(srv.root, srv.wikis))
-        session = conv["session"]
-
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
 
+        srv.refresh_diff()
+        rules = srv.rules()
+        mb = srv.diff.get("mb") if srv.diff else None
+        wiki = status.wikis_status(srv.root, srv.wikis, against=mb)
+        head_now = status._head(srv.root) if srv.diff else None
+        session, fork = conv["session"], False
+        if srv.diff and session is None and not conv["fallback"]:
+            if srv.build_context:
+                session, fork = srv.build_session, True
+            else:
+                conv["fallback"] = True
+        for _ in range(2):
+            prompt = build_prompt(question, ctx, *wiki, diff=srv.diff,
+                                  build_context=not conv["fallback"], head_now=head_now)
+            if self._attempt(conv, rules, prompt, session, fork) != "resume_failed":
+                return
+            # The build session is gone (cleaned up, another machine): answer without it.
+            srv.build_ok = False
+            conv["fallback"] = True
+            session, fork = None, False
+            if not self._emit({"type": "notice", "code": "no-build-context"}):
+                return
+
+    def _attempt(self, conv: dict, rules: str, prompt: str, session: str | None,
+                 fork: bool) -> str:
+        """One engine run, streamed to the client: "done", or "resume_failed"
+        when the session to resume does not exist (nothing was streamed)."""
+        srv = self.server
+        ad = engines.adapter(srv.engine, srv.root, diff=bool(srv.diff))
         try:
             proc = subprocess.Popen(
-                ad.argv(rules, session, srv.root), cwd=str(srv.root),
+                ad.argv(rules, session, srv.root, fork=fork), cwd=str(srv.root),
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, encoding="utf-8", errors="replace",
                 env=engines.child_env(), start_new_session=True)
         except OSError as e:
             self._emit({"type": "error", "message": f"cannot start {srv.engine}: {e}"})
-            return
+            return "done"
 
         lines: queue.Queue = queue.Queue()
         stderr: list[str] = []
@@ -397,6 +507,7 @@ class Handler(BaseHTTPRequestHandler):
 
         deadline = time.monotonic() + srv.timeout
         connected = True
+        outcome = "done"
         try:
             while True:
                 try:
@@ -416,13 +527,16 @@ class Handler(BaseHTTPRequestHandler):
                         self._emit(ev)
                     break
                 for ev in ad.feed(line):
+                    if ev["type"] == "resume_failed":
+                        outcome = "resume_failed"
+                        break
                     if ev["type"] == "session":
                         conv["session"] = ev["id"]
                         continue
                     if not self._emit(ev):
                         connected = False
                         break
-                if not connected:
+                if not connected or outcome == "resume_failed":
                     break
                 if time.monotonic() > deadline:
                     self._emit({"type": "error",
@@ -444,6 +558,7 @@ class Handler(BaseHTTPRequestHandler):
                     pipe.close()
                 except OSError:
                     pass
+        return outcome
 
 
 # ---------------------------------------------------------------- commands
