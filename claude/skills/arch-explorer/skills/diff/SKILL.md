@@ -1,7 +1,7 @@
 ---
 name: diff
-description: Explain what a branch changed, block by block, as an interactive architecture map in a single self-contained HTML file. Compares a head branch against a base (default — the current branch against main or master), assigns every changed file to the module box it lives in, explains each block's changes as features with file:line references, and draws the map with added, modified and removed boxes, arrows and interfaces marked. Use when asked what a branch or PR changed structurally, to explain or review a branch's changes by module, for a visual change summary, or "브랜치 변경 내용을 블럭별로 설명해줘".
-argument-hint: "[head [base]] [--save-to[=<path>]] [--include-uncommitted]"
+description: Explain what a branch changed, block by block, as an interactive architecture map in a single self-contained HTML file. Compares a head branch against a base (default — the current branch against main or master), assigns every changed file to the module box it lives in, explains each block's changes as features with file:line references, and draws the map with added, modified and removed boxes, arrows and interfaces marked. With --open, builds the map in a headless Claude session and opens it with a chat panel that answers questions about the change from that session's analysis and about the existing code from the code-wiki. Use when asked what a branch or PR changed structurally, to explain or review a branch's changes by module, for a visual change summary, to ask questions about a branch's changes next to its map, or "브랜치 변경 내용을 블럭별로 설명해줘".
+argument-hint: "[head [base]] [--save-to[=<path>]] [--include-uncommitted] [--open]"
 ---
 
 # Branch change map
@@ -17,10 +17,13 @@ code, interfaces, rendering, verifying) with the overrides below. Its rule
 holds here too, and applies to changes as much as to structure: **never claim
 a change you have not seen in the diff.**
 
+`<plugin>` below is this plugin's root: two levels above this skill's base
+directory. `<root>` is `git rev-parse --show-toplevel`.
+
 ## 0. Arguments
 
 ```
-/arch-explorer:diff [head [base]] [--save-to[=<path>]] [--include-uncommitted]
+/arch-explorer:diff [head [base]] [--save-to[=<path>]] [--include-uncommitted] [--open]
 ```
 
 | Given | head (the new work) | base (compared against) |
@@ -29,65 +32,57 @@ a change you have not seen in the diff.**
 | `head` | `head` | auto-detected (§1) |
 | nothing | the current branch | auto-detected (§1) |
 
-Two flags, and no others; anything else that is not a ref, ask about rather
-than guess.
+Three flags, and no others; anything else that is not a ref, ask about
+rather than guess.
 
 - `--save-to` changes where the file is written (§6).
 - `--include-uncommitted` compares against the working tree instead of head's
   last commit: staged, unstaged and untracked (not ignored) files all count as
   part of the branch's work. It applies only when head is the current branch,
   since only the current branch has a working tree here.
+- `--open` builds the map in a headless Claude session instead of this one,
+  then opens it with a chat panel that forks that session (§8). Without it,
+  this session builds the map and nothing is opened.
+
+**If your prompt already gives you `RANGE` and `OUTPUT`, you are that
+headless build:** skip §0, §1 and §8, follow §2–§7 for that range, and write
+only `OUTPUT` — the program records the sidecar.
 
 ## 1. Resolve the range
 
-Everything below reads refs; **never check out, reset or stash in the user's
-working tree.**
+The program resolves the range; it never checks out, resets, stashes or
+touches the user's index. **Do not do any of that yourself either.**
 
-1. **Head.** With no positional argument, `git branch --show-current`. Empty
-   output means a detached HEAD — ask which branch to explain.
-2. **Base, when not given.** Take the first of these that exists
-   (`git rev-parse --verify --quiet <ref>^{commit}`):
-   `refs/heads/main`, `refs/remotes/origin/main`, `refs/heads/master`,
-   `refs/remotes/origin/master`. Refer to it by the branch name (`main`), not
-   the remote-tracking name. If a local and an `origin/` ref both exist and
-   point at different commits, use the local one and say so in the report.
-3. **Ask the user for the base, and do not proceed, when:**
-   - head is itself `main` or `master` and no base was given — with
-     `--include-uncommitted`, offer "only the uncommitted changes" (base = head
-     itself) as one of the choices,
-   - neither `main` nor `master` exists,
-   - a ref the user named does not resolve,
-   - head and base resolve to the same commit — unless
-     `--include-uncommitted` is given, in which case the comparison is simply
-     the uncommitted changes,
-   - `git merge-base <base> <head>` finds no common ancestor.
+```bash
+python3 "<plugin>/bin/diff_session.py" resolve --root <root> [head [base]] \
+  [--include-uncommitted] [--save-to[=<path>]]
+```
 
-   Also ask, rather than silently dropping the flag, when
-   `--include-uncommitted` is given but head is not the current branch.
-4. **Compare from the merge-base**, `mb = git merge-base <base> <head>`. All
-   diffs run from `mb` — the same as `git diff base...head`. A two-dot diff
-   against the base tip would also show everything that landed on the base
-   after the branch forked, as if the branch had reverted it.
-5. **Fix the after side, `<after>`.** Without `--include-uncommitted` it is
-   `head`. With it, it is a tree snapshot of the working tree, taken through a
-   temporary index so the user's own index is never touched:
+Pass the user's refs and flags through as given (`--save-to` alone, or
+`--save-to=<path>`; never `--save-to <path>`). It prints one of:
 
-   ```
-   tmp=<scratch-dir>/index
-   cp "$(git rev-parse --git-path index)" "$tmp"
-   GIT_INDEX_FILE="$tmp" git add -A
-   after=$(GIT_INDEX_FILE="$tmp" git write-tree)
-   ```
+| Output | Do |
+|---|---|
+| `ask: true` | Ask the user `reason`, offering `choices` when there are any. Then resolve again with what they chose — an explicit `head base`, or `head head` with `--include-uncommitted` for "only the uncommitted changes". Do not proceed on a guess. |
+| `empty: true` | Say that head has no changes against the base and stop. Write no file. |
+| `error` | Report it and stop. |
+| the range | Go on. |
 
-   `git add -A` honours `.gitignore`, so ignored files stay out. Every diff
-   below uses `<after>`; the commit list still reads `mb..head`.
-6. If `git diff --quiet mb <after>` reports no changes, say so and stop; do not
-   write a file.
-7. If head is the current branch, `git status --porcelain` is non-empty and
-   `--include-uncommitted` was not given, note in the report that uncommitted
-   changes are not part of the comparison and that the flag would include
-   them. With the flag, report how many files came from uncommitted work
-   (`git diff --name-only head <after>`).
+The range has `head`, `head_sha`, `base`, `mb` (the merge-base), `after`,
+`uncommitted`, `read_from`, `commits`, `files`, `notes`, `out` (where §6 puts
+the map), `sidecar` and `range_file`. What it settles, for the sections
+below:
+
+- **Diffs run from the merge-base `mb`**, the same as `git diff base...head`. A
+  two-dot diff against the base tip would also show everything that landed on
+  the base after the branch forked, as if the branch had reverted it.
+- **The after side is `<after>`**: head's commit, or with
+  `--include-uncommitted` a tree snapshot of the work tree (ignored files
+  left out). Every diff below uses `<after>`; the commit list reads
+  `mb..head`.
+- **`notes`** go in the report: which base ref was used when local and
+  `origin/` disagree, uncommitted changes left out (and that the flag would
+  include them) or how many files came from them, a file to be overwritten.
 
 ## 2. Collect the change
 
@@ -98,11 +93,11 @@ git diff --numstat -M mb <after>
 ```
 
 **Where to read code.** The code before the change is `git show mb:<path>`.
-The code after it is the working tree when head is the current branch and
-either the tree is clean or `--include-uncommitted` is given; otherwise add a
-temporary worktree,
+The code after it is the working tree when `read_from` is `worktree`;
+otherwise add a temporary worktree,
 `git worktree add --detach <scratch-dir> <head>`, read there, and remove it
-with `git worktree remove` when done.
+with `git worktree remove` when done. (A headless build is told where to read
+instead; its worktree is made and removed by the program.)
 
 ## 3. Map the head — only as deep as the change
 
@@ -208,11 +203,11 @@ interaction contract:
 
 ## 6. Where to write it
 
-Name the file `<head>-vs-<base>.html`, with `/` in branch names replaced by
-`-` (`feature/login` against `main` → `feature-login-vs-main.html`). With
-`--include-uncommitted`, `<head>` becomes `<head>-uncommitted`
-(`feature-login-uncommitted-vs-main.html`), so a snapshot of work in progress
-never overwrites the map of the committed branch.
+Write the map to the range's `out`. `resolve` names it `<head>-vs-<base>.html`,
+with `/` in branch names replaced by `-` (`feature/login` against `main` →
+`feature-login-vs-main.html`). With `--include-uncommitted`, `<head>` becomes
+`<head>-uncommitted` (`feature-login-uncommitted-vs-main.html`), so a snapshot
+of work in progress never overwrites the map of the committed branch.
 
 | `--save-to` | Written to |
 |---|---|
@@ -225,6 +220,17 @@ Paths are relative to the current directory. Create missing directories. If
 the file already exists, overwrite it — it is the same comparison, re-run —
 and say in the report that you did. Unlike build, write no `README.md` next to
 it: this is a review of one branch, not a document to maintain.
+
+After the checks in §7 pass, record the sidecar, so that
+`/arch-explorer:open <out>` recognises the map as a change map later:
+
+```bash
+python3 "<plugin>/bin/diff_session.py" record --range-file <range_file>
+```
+
+It writes `<stem>.arch-explorer.json` next to the map with `session: null` —
+this session is interactive, so the chat cannot fork it and will answer
+without the build's analysis.
 
 ## 7. Verify before you call it done
 
@@ -240,10 +246,62 @@ Run build's section 4 checks, and add:
 - **Removed means removed** — every `removed` element existed at `mb` and does
   not exist at `<after>`.
 
-Then remove any worktree and temporary index you added, and report: the output path, the range
+Then remove any worktree you added, and report: the output path, the range
 (head, base, merge-base, commit count), blocks and files changed, and the
-notes from §1 and §6 that applied — which base ref was used, uncommitted
-changes left out or how many were included, a file overwritten.
+range's `notes`. Mention that `/arch-explorer:open <out>` opens it with a
+chat panel, and that `--open` next time gives that chat this build's
+analysis.
+
+## 8. `--open`: build headless, then open with a chat panel
+
+The map is built by a headless `claude -p` session that the program starts,
+so that the chat can later fork that session and answer from its analysis.
+Ask every question **before** the build: it runs unattended and can take
+several minutes.
+
+1. **Range.** §1, including its questions.
+2. **Engine.** `python3 "<plugin>/bin/engines.py" choose --engine claude`. If
+   `engine` is null, Claude Code's CLI is not installed: say `--open` needs
+   it, and ask whether to build the map here without the chat instead (then
+   follow §2–§7). A saved default of codex does not matter here; say that the
+   build and the chat use Claude this time.
+3. **Wiki.** The chat answers questions about unchanged code from the
+   code-wiki, judged against the merge-base:
+   ```bash
+   python3 "<plugin>/bin/status.py" check --root <root> --map <out> --against <mb>
+   ```
+   Read `wiki` and handle it as `/arch-explorer:open` §2 does (the sibling
+   `open/SKILL.md`), with one difference: a missing or declined wiki does
+   **not** turn the chat off — questions about the change still have the
+   build's analysis. Say that answers about unchanged code will be thin.
+   Remember any wiki dirs for step 5.
+4. **Build**, in the background (Bash `run_in_background`):
+   ```bash
+   python3 "<plugin>/bin/diff_session.py" build --range-file <range_file>
+   ```
+   Tell the user it is running and where its progress log is (`build_log`
+   from the range); read the log when they ask how it is going. When it
+   ends it prints:
+   - `error` → report it with the last lines of `log`, and stop. When it
+     names files the build changed, ask the user to review them; the program
+     does not revert anything. When a `session` is given, the user can
+     inspect it with `claude --resume <session>`.
+   - `reused: true` → the same range was built before; say so. Pass `--force`
+     only when the user asks for a fresh build.
+   - otherwise `report` is the build's §7 report.
+5. **Open.**
+   ```bash
+   python3 "<plugin>/bin/chat_server.py" launch --root <root> --map <out> \
+     --engine claude [--wiki <dir> …]
+   ```
+   As in `/arch-explorer:open` §4: on an error, show the last lines of its
+   log and stop.
+6. **Report**: the build's report (output path, range, blocks and files, the
+   range's notes), the URL, that answers about the change come from the
+   build session (`session`) and those about the rest of the code from the
+   wiki, and how to stop the server:
+   `python3 "<plugin>/bin/chat_server.py" stop --root <root> --map <out>`.
+   `/arch-explorer:open <out>` reopens it later with the same build session.
 
 ## Common failure modes
 
@@ -253,7 +311,10 @@ changes left out or how many were included, a file overwritten.
   which behaviour changed.
 - **Mapping the whole repository deeply.** Only changed paths get depth.
 - **Dropping files that do not fit a box.** They go in `other`, visibly.
-- **Snapshotting through the real index.** `git add` without
-  `GIT_INDEX_FILE` stages the user's files behind their back.
+- **Resolving the range by hand.** `diff_session.py resolve` already does it,
+  without touching the user's index; its snapshot excludes the map's own
+  files.
 - **Checking out the branch to read it.** Use `git show` or a separate
   worktree; the user's working tree is not yours to move.
+- **Asking during an `--open` build.** Nobody is there to answer; settle
+  everything in §8 steps 1–3 first.

@@ -138,6 +138,39 @@ class ClaudeAdapterTest(unittest.TestCase):
         self.assertIn("Not logged in", ev[0]["message"])
 
 
+class ClaudeDiffAdapterTest(unittest.TestCase):
+    def test_change_map_chat_reads_git_read_only(self):
+        argv = engines.ClaudeAdapter(diff=True).argv("RULES", None, Path("/r"))
+        self.assertEqual(argv[argv.index("--tools") + 1], "Read,Grep,Glob,Bash")
+        self.assertEqual(argv[argv.index("--permission-mode") + 1], "dontAsk")
+        allowed = argv[argv.index("--allowedTools") + 1:argv.index("--disallowedTools")]
+        self.assertIn("Bash(git show *)", allowed)
+        self.assertFalse([a for a in allowed if a.startswith("Bash(") and "git show" not in a
+                          and "git diff" not in a and "git log" not in a])
+        self.assertEqual(argv[argv.index("--disallowedTools") + 1], "Bash(git *--output*)")
+        self.assertEqual(argv[argv.index("--append-system-prompt") + 1], "RULES")
+
+    def test_fork_only_with_a_session(self):
+        a = engines.ClaudeAdapter(diff=True)
+        argv = a.argv("RULES", "build", Path("/r"), fork=True)
+        self.assertEqual(argv[-3:], ["--resume", "build", "--fork-session"])
+        self.assertNotIn("--fork-session", a.argv("RULES", "s2", Path("/r")))
+        self.assertNotIn("--fork-session", a.argv("RULES", None, Path("/r"), fork=True))
+
+    def test_missing_session_is_resume_failed(self):
+        ev = run(engines.ClaudeAdapter(), [
+            {"type": "result", "subtype": "error_during_execution", "is_error": True,
+             "num_turns": 0, "session_id": "new",
+             "errors": ["No conversation found with session ID: build"]}], returncode=1)
+        self.assertEqual([e["type"] for e in ev], ["resume_failed"])
+
+    def test_other_errors_stay_errors(self):
+        ev = run(engines.ClaudeAdapter(), [
+            {"type": "result", "subtype": "error_during_execution", "is_error": True,
+             "num_turns": 3, "errors": ["No conversation found in the wiki"]}])
+        self.assertEqual(ev[-1]["type"], "error")
+
+
 class CodexAdapterTest(unittest.TestCase):
     def test_argv_first_turn_and_resume(self):
         a = engines.CodexAdapter()

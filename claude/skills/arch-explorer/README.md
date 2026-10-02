@@ -87,7 +87,7 @@ selection in them — rebuild to get both.
 ## Map what a branch changed
 
 ```
-/arch-explorer:diff [head [base]] [--save-to[=<path>]] [--include-uncommitted]
+/arch-explorer:diff [head [base]] [--save-to[=<path>]] [--include-uncommitted] [--open]
 ```
 
 Draws the same map for the code at the head of a branch, with the boxes,
@@ -124,6 +124,39 @@ head name (`feature-login-uncommitted-vs-main.html`), so it never overwrites
 the committed comparison. The snapshot goes through a temporary index; your
 staging area is left as it was.
 
+Next to the map, diff writes `<head>-vs-<base>.arch-explorer.json`, recording
+the range it was drawn from, so `open` can recognise a change map later.
+
+### Ask about the change next to its map
+
+```
+/arch-explorer:diff --open
+```
+
+`--open` builds the map in a headless `claude -p` session instead of yours,
+then opens it with the chat panel. Every conversation in the panel starts as
+a fork of that build session, so questions about the change — "why did this
+box change?", "what did `save` do before?" — are answered from the analysis
+the build already did. Questions about code the branch did not touch are
+answered from the code-wiki, judged against the merge-base, as in `open`.
+Forking leaves the build session as it was, so "새 대화" starts again from
+right after the build.
+
+All questions — which base, whether to sync the wiki — come before the build,
+which then runs unattended for a few minutes; its progress goes to a log file.
+It runs under `--permission-mode dontAsk` with read-only git, `python3` for
+its checks, subagents, and Write for the map. Afterwards the program checks
+that nothing else in the work tree changed, and records the build session in
+the sidecar only if so. The chat gets `git show`, `git diff` and `git log` on
+top of `open`'s read-only tools, and nothing that writes.
+
+`/arch-explorer:open <map path>` reopens a change map later, forking the same
+build session. It asks to rebuild when the branch has moved since. A map
+built without `--open` opens too, but its chat answers about the change from
+the change cards and git only, without the build's analysis — and so does any
+map whose build session Claude Code has since cleaned up. `--open` needs the
+`claude` CLI.
+
 ## Development
 
 ```
@@ -132,4 +165,5 @@ python3 -m unittest discover -s claude/skills/arch-explorer -t claude/skills/arc
 
 The tests use throwaway git repositories and fake `claude`/`codex` scripts;
 they do not show that the real CLIs work. Check that by running
-`/arch-explorer:open` against a real repo with each engine.
+`/arch-explorer:open` against a real repo with each engine, and
+`/arch-explorer:diff --open` on a real branch.

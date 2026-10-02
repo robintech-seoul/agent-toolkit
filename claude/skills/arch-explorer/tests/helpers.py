@@ -55,8 +55,13 @@ if mode == "sleep":
 if mode == "fail":
     sys.stderr.write("boom: auth expired\n")
     sys.exit(3)
+if mode == "noresume" and "--resume" in sys.argv:
+    sid = sys.argv[sys.argv.index("--resume") + 1]
+    sys.stderr.write("No conversation found with session ID: " + sid + "\n")
+    print(json.dumps({{"type": "result", "subtype": "error_during_execution", "is_error": True, "num_turns": 0, "session_id": "sess-new", "errors": ["No conversation found with session ID: " + sid]}}), flush=True)
+    sys.exit(1)
 if "{name}" == "claude":
-    sid = "sess-claude-1"
+    sid = "sess-fork-" + str(os.getpid()) if "--fork-session" in sys.argv else "sess-claude-1"
     print(json.dumps({{"type": "system", "subtype": "init", "session_id": sid}}), flush=True)
     print(json.dumps({{"type": "assistant", "message": {{"content": [{{"type": "tool_use", "name": "Read", "input": {{"file_path": "wiki/src/index.md"}}}}]}}}}), flush=True)
     for part in ["See ", "`src/a.py:3`."]:

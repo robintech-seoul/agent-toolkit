@@ -8,7 +8,7 @@ for Claude Code and **`robintech-codex`** for Codex.
 
 | Tool | What it does | Commands | Claude Code | Codex |
 |---|---|---|:-:|:-:|
-| [`arch-explorer`](./claude/skills/arch-explorer) | Map a codebase into one self-contained HTML file you drill through: boxes are modules, labeled arrows are the interfaces between them, each expanding to signatures and `file:line`. Maps what a branch changed; opens the map with a chat panel that answers from the code-wiki. | `build` `diff` `open` | ✓ | — |
+| [`arch-explorer`](./claude/skills/arch-explorer) | Map a codebase into one self-contained HTML file you drill through: boxes are modules, labeled arrows are the interfaces between them, each expanding to signatures and `file:line`. Maps what a branch changed; opens either map with a chat panel that answers from the code-wiki — and, for a branch, from the session that mapped its changes. | `build` `diff` `open` | ✓ | — |
 | [`code-wiki`](./claude/skills/code-wiki) | Build and maintain a hierarchical, LLM-generated wiki over a codebase. Leaf folders summarize their files, parents synthesize their children, topic pages capture cross-cutting concerns, and `sync` follows the source. Committed, so a team pays for it once. | `init` `build` `sync` `query` `topic` `lint` `rebuild` | ✓ | — |
 | [`mvp-builder`](./claude/skills/mvp-builder) | Take an idea to an MVP through a gated pipeline: spec → your approval → design/review loops → your approval → build, with ledger-based delta review and machine gates. | `start` `approve` `reject` `status` | ✓ | ✓ ([port](./codex/skills/mvp-builder)) |
 | [`robin-cloud-onboarding`](./claude/plugins/robin-cloud-onboarding) | Onboard a repo to [Robin-Cloud](https://robin-cloud.com) end to end: Dockerfiles, a keyless CI workflow and nginx, then the console setup (GitHub App, ECR, deploy config, DB, custom domain + TLS) with a verified checkpoint after each step. | `onboard` | ✓ | — |
@@ -61,7 +61,7 @@ line again. In a new Codex task, choose the `start`, `approve`, `reject` and
 
 | Tool | Needs |
 |---|---|
-| arch-explorer | `python3` and `git`. `open`'s chat panel also needs the `code-wiki` plugin and the `claude` or `codex` CLI; without them the map opens without the chat. |
+| arch-explorer | `python3` and `git`. `open`'s chat panel also needs the `code-wiki` plugin and the `claude` or `codex` CLI; without them the map opens without the chat. `diff --open` needs the `claude` CLI. |
 | code-wiki | `python3` and its Python packages: `pip install mistune pyyaml` (see [its README](./claude/skills/code-wiki/README.md#install)). A git repository for `sync`. |
 | mvp-builder (Claude Code) | `bash` and `jq`; `npm` or `pytest` for the project it builds. |
 | mvp-builder (Codex) | Python 3.10+, the Codex CLI signed in; macOS/Linux (WSL on Windows). |
@@ -86,6 +86,8 @@ other, and meet in `/arch-explorer:open`:
 /code-wiki:init, /code-wiki:build   → wiki/        (commit it)
 /arch-explorer:build                → docs/architecture/index.html
 /arch-explorer:open                 → the map, with a chat panel answering from wiki/
+/arch-explorer:diff --open          → a branch's change map, with a chat panel answering
+                                      from the session that built it and from wiki/
 ```
 
 `open` checks that both are current first, and offers to build, create or sync

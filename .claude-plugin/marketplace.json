@@ -14,7 +14,7 @@
     {
       "name": "arch-explorer",
       "source": "./claude/skills/arch-explorer",
-      "description": "Build an interactive, recursively drillable architecture map of a codebase as a single self-contained HTML file — boxes are modules, labeled arrows are the interfaces between them, and every arrow expands to full signatures with source locations. Open it with a chat panel that answers questions from the code-wiki via headless Claude or Codex. Also maps what a branch changed against main, block by block."
+      "description": "Build an interactive, recursively drillable architecture map of a codebase as a single self-contained HTML file — boxes are modules, labeled arrows are the interfaces between them, and every arrow expands to full signatures with source locations. Open it with a chat panel that answers questions from the code-wiki via headless Claude or Codex. Also maps what a branch changed against main, block by block, and opens that map with a chat that answers from the session that built it."
     },
     {
       "name": "code-wiki",

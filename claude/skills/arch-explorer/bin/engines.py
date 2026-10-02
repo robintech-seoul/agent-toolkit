@@ -94,11 +94,20 @@ def choose(explicit: str | None = None, reset: bool = False) -> dict:
 #   {"type": "tool",    "name", "detail"}
 #   {"type": "final",   "text"}        the answer
 #   {"type": "error",   "message"}
-# Every run ends in exactly one "final" or "error" — `finish` supplies the
-# error when the process exits without either, so an empty answer never
-# looks like a successful one.
+#   {"type": "resume_failed", "message"}  the session to resume does not exist
+# Every run ends in exactly one "final", "error" or "resume_failed" — `finish`
+# supplies the error when the process exits without one, so an empty answer
+# never looks like a successful one.
 
 READ_ONLY_TOOLS = "Read,Grep,Glob"
+# A change map's chat also reads the code before the change and the hunks, so
+# it gets three read-only git commands. Anything else is refused by dontAsk
+# (redirects included); git's own file-writing option is refused explicitly.
+GIT_WRITE_DENY = ("Bash(git *--output*)",)
+DIFF_CHAT_TOOLS = "Read,Grep,Glob,Bash"
+DIFF_CHAT_ALLOWED = (["Read", "Grep", "Glob"]
+                     + [f"Bash(git {c})" for c in ("show", "diff", "log")]
+                     + [f"Bash(git {c} *)" for c in ("show", "diff", "log")])
 _STRIP_ENV = ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT")
 
 
@@ -113,8 +122,9 @@ def _short(value, limit: int = 120) -> str:
 
 
 class _Adapter:
-    def __init__(self, root: Path | None = None) -> None:
+    def __init__(self, root: Path | None = None, diff: bool = False) -> None:
         self.ended = False
+        self.diff = diff
         # Tool details name files by absolute path; show them relative to the repo.
         self.prefixes = sorted({f"{r}{os.sep}" for r in
                                 ([str(root), str(Path(root).resolve())] if root else [])},
@@ -155,13 +165,21 @@ class _Adapter:
 class ClaudeAdapter(_Adapter):
     name = "claude"
 
-    def argv(self, rules: str, session: str | None, root: Path) -> list[str]:
+    def argv(self, rules: str, session: str | None, root: Path, fork: bool = False) -> list[str]:
         cmd = ["claude", "-p", "--output-format", "stream-json", "--verbose",
-               "--include-partial-messages", "--tools", READ_ONLY_TOOLS,
-               "--strict-mcp-config",  # --tools alone leaves MCP tools available
-               "--append-system-prompt", rules]
+               "--include-partial-messages",
+               "--strict-mcp-config"]  # --tools alone leaves MCP tools available
+        if self.diff:
+            cmd += ["--tools", DIFF_CHAT_TOOLS, "--permission-mode", "dontAsk",
+                    "--allowedTools", *DIFF_CHAT_ALLOWED,
+                    "--disallowedTools", *GIT_WRITE_DENY]
+        else:
+            cmd += ["--tools", READ_ONLY_TOOLS]
+        cmd += ["--append-system-prompt", rules]
         if session:
             cmd += ["--resume", session]
+            if fork:  # a new session from the build's; the build session stays as it was
+                cmd.append("--fork-session")
         return cmd
 
     def stdin(self, rules: str, prompt: str, session: str | None) -> str:
@@ -187,6 +205,10 @@ class ClaudeAdapter(_Adapter):
                                    "detail": self._detail(detail)})
             return events
         if t == "result":
+            errors = [str(e) for e in d.get("errors") or []]
+            if (d.get("is_error") and not d.get("num_turns")
+                    and any("No conversation found" in e for e in errors)):
+                return self._end({"type": "resume_failed", "message": _short(errors[0], 500)})
             events = []
             if d.get("session_id"):
                 events.append({"type": "session", "id": d["session_id"]})
@@ -200,11 +222,12 @@ class ClaudeAdapter(_Adapter):
 class CodexAdapter(_Adapter):
     name = "codex"
 
-    def __init__(self, root: Path | None = None) -> None:
-        super().__init__(root)
+    def __init__(self, root: Path | None = None, diff: bool = False) -> None:
+        super().__init__(root, diff)
         self.last_message = None
 
-    def argv(self, rules: str, session: str | None, root: Path) -> list[str]:
+    def argv(self, rules: str, session: str | None, root: Path, fork: bool = False) -> list[str]:
+        # The server never asks codex to fork: only a claude build leaves a session.
         if session:
             # `exec resume` has no --sandbox; the config override applies it.
             return ["codex", "exec", "resume", session, "--json",
@@ -241,8 +264,8 @@ class CodexAdapter(_Adapter):
         return []
 
 
-def adapter(engine: str, root: Path | None = None) -> _Adapter:
-    return {"claude": ClaudeAdapter, "codex": CodexAdapter}[engine](root)
+def adapter(engine: str, root: Path | None = None, diff: bool = False) -> _Adapter:
+    return {"claude": ClaudeAdapter, "codex": CodexAdapter}[engine](root, diff)
 
 
 # ---------------------------------------------------------------- cli

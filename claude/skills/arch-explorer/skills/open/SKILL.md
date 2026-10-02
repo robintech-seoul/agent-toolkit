@@ -1,6 +1,6 @@
 ---
 name: open
-description: Open the architecture map in the browser with a chat panel beside it that answers questions about the code from the project's code-wiki, using headless Claude or Codex, read-only. Checks first that the map and the wiki are current, and offers to build, create or sync whichever is missing or behind. Use when asked to open, show or view the architecture map, to ask questions about the codebase next to the map, or "지도 열어줘", "아키텍처 맵 보여줘".
+description: Open the architecture map in the browser with a chat panel beside it that answers questions about the code from the project's code-wiki, using headless Claude or Codex, read-only. Also reopens a change map from /arch-explorer:diff, whose chat answers questions about the change from the session that built it. Checks first that the map and the wiki are current, and offers to build, create or sync whichever is missing or behind. Use when asked to open, show or view the architecture map or a branch's change map, to ask questions about the codebase next to the map, or "지도 열어줘", "아키텍처 맵 보여줘".
 argument-hint: "[map path] [--engine=claude|codex] [--reset-engine] [--port=N]"
 ---
 
@@ -29,7 +29,7 @@ repository, stop and say that freshness checks and the chat need one.
 
 | Given | Meaning |
 |---|---|
-| map path | the map's HTML; default `docs/architecture/index.html` |
+| map path | the map's HTML; default `docs/architecture/index.html`. A change map from `/arch-explorer:diff` works too (§1) |
 | `--engine` | answer with this engine, this time only; the saved default is untouched |
 | `--reset-engine` | forget the saved default engine and choose again (§3) |
 | `--port` | fixed port for the server; default: any free port |
@@ -46,7 +46,9 @@ python3 "<plugin>/bin/status.py" check --root <root> --map <map path> [--wiki <d
 Pass every `--wiki` the user gave, here and in every later `check` and
 `launch`. Call the list of them *the wiki dirs*; empty means the repo root.
 
-Read `map` from the output:
+Read `kind` and `map` from the output. `kind` is `diff` for a change map —
+one with a `<stem>.arch-explorer.json` sidecar from `/arch-explorer:diff` —
+and `build` otherwise. For a change map, use the second table below.
 
 | `map.state` | Do |
 |---|---|
@@ -58,10 +60,31 @@ Read `map` from the output:
 Skip this section when `/arch-explorer:build` sent you here — the map was
 just built.
 
+For a change map, `map` also has `head`, `base`, `mb`, `uncommitted` and
+`session` (whether the build session that the chat forks was recorded):
+
+| `map.state` | Do |
+|---|---|
+| `missing` | Say there is no file at that path and stop. `/arch-explorer:diff --open` builds one. |
+| `unknown` | Ask "Can't tell whether this change map is current (`<reason>`). Rebuild, or open as is?" |
+| `stale` | Ask, by `reason`: `advanced` — "`<head>` has `<commits>` more commit(s) since this map was drawn"; `rewritten` — "`<head>` was rewritten (rebased or reset) since"; `worktree` — "the work tree changed since". "Rebuild, or open as is?" |
+| `fresh` | Go on. |
+
+To rebuild, follow `/arch-explorer:diff` (the sibling `diff/SKILL.md`) §8 for
+`<head> <base> --open`, adding `--include-uncommitted` when `uncommitted` is
+true and `--save-to=<this map path>`. That opens the map itself; stop here.
+
 ## 2. The code-wiki
 
 The chat answers from the code-wiki. Without one, open the map without the
-panel (chat off).
+panel (chat off) — except a change map: its chat still answers questions
+about the change, so a missing or declined wiki keeps the chat on; say that
+answers about unchanged code will be thin.
+
+For a change map the check already judges the wiki against the merge-base:
+the branch's own changes are what the map explains, not something the wiki
+is behind on. `wiki.includes_branch` means the wiki was synced on the branch
+and may already describe some of its changes; mention it.
 
 1. **Is code-wiki installed?** Look for `code-wiki:sync` among the available
    skills. If it is not there, say the chat needs it —
@@ -97,6 +120,11 @@ changed; `/code-wiki:sync` reporting "up to date" settles it.
 ## 3. The engine
 
 Only with chat on.
+
+A change map whose `map.session` is true was built by a Claude session that
+the chat forks, so use Claude: `engines.py choose --engine claude`. If Claude
+is not installed, choose as below instead and say the answers will not have
+the build's analysis. Without a session, choose as below.
 
 ```bash
 python3 "<plugin>/bin/engines.py" choose [--engine <e>] [--reset]
@@ -141,6 +169,8 @@ In a few lines:
 - the engine, and whether it is the saved default,
 - the map's and wiki's state — per wiki dir when there are several —
   including anything left stale by choice,
+- for a change map, its range (`head` vs `base`) and whether the chat has the
+  build's analysis (a recorded session and Claude) or answers without it,
 - chat off, and why, when that is the case,
 - how to stop the server:
   `python3 "<plugin>/bin/chat_server.py" stop --root <root> --map <map path>`.
@@ -152,6 +182,12 @@ machine restarts; running `/arch-explorer:open` again reuses it.
 
 - Answers are read-only: Claude runs with only Read, Grep and Glob and no MCP
   servers; Codex runs in its read-only sandbox. Neither can change files.
+  For a change map, Claude also gets `git show`, `git diff` and `git log`
+  (to read the code before the change and the hunks), under
+  `--permission-mode dontAsk`, which refuses anything else.
+- A change map's conversations each start as a fork of the session that built
+  it, so they answer from its analysis; the build session itself is never
+  changed. If it is gone, the panel says so and answers without it.
 - The panel sends the layer being viewed and the selected box with each
   question, so "what does this do?" means the selected box.
 - A conversation continues until "새 대화" in the panel or a server restart.
