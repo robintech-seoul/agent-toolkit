@@ -10,6 +10,7 @@ for Claude Code and **`robintech-codex`** for Codex.
 |---|---|---|:-:|:-:|
 | [`arch-explorer`](./claude/skills/arch-explorer) | Map a codebase into one self-contained HTML file you drill through: boxes are modules, labeled arrows are the interfaces between them, each expanding to signatures and `file:line`. Maps what a branch changed; opens either map with a chat panel that answers from the code-wiki — and, for a branch, from the session that mapped its changes. | `build` `diff` `open` | ✓ | — |
 | [`code-wiki`](./claude/skills/code-wiki) | Build and maintain a hierarchical, LLM-generated wiki over a codebase. Leaf folders summarize their files, parents synthesize their children, topic pages capture cross-cutting concerns, and `sync` follows the source. Committed, so a team pays for it once. | `init` `build` `sync` `query` `topic` `lint` `rebuild` | ✓ | — |
+| [`grounded`](./claude/skills/grounded) | Get a deep opinion on a hard question from the strongest model, written as a document, then fact-check it with a cheaper model in a separate context: the verifier extracts the facts the opinion rests on and confirms, refutes or flags each with cited evidence; Fable re-judges every refutation, revises, and a fresh verifier re-checks — up to three rounds. | `ask` `verify` | ✓ | — |
 | [`mvp-builder`](./claude/skills/mvp-builder) | Take an idea to an MVP through a gated pipeline: spec → your approval → design/review loops → your approval → build, with ledger-based delta review and machine gates. | `start` `approve` `reject` `status` | ✓ | ✓ ([port](./codex/skills/mvp-builder)) |
 | [`robin-cloud-onboarding`](./claude/plugins/robin-cloud-onboarding) | Onboard a repo to [Robin-Cloud](https://robin-cloud.com) end to end: Dockerfiles, a keyless CI workflow and nginx, then the console setup (GitHub App, ECR, deploy config, DB, custom domain + TLS) with a verified checkpoint after each step. | `onboard` | ✓ | — |
 
@@ -27,6 +28,7 @@ Add the marketplace once, then install the tools you want:
 
 /plugin install arch-explorer@robintech
 /plugin install code-wiki@robintech
+/plugin install grounded@robintech
 /plugin install mvp-builder@robintech
 /plugin install robin-cloud-onboarding@robintech
 ```
@@ -63,6 +65,7 @@ line again. In a new Codex task, choose the `start`, `approve`, `reject` and
 |---|---|
 | arch-explorer | `python3` and `git`. `open`'s chat panel also needs the `code-wiki` plugin and the `claude` or `codex` CLI; without them the map opens without the chat. `diff --open` needs the `claude` CLI. |
 | code-wiki | `python3` and its Python packages: `pip install mistune pyyaml` (see [its README](./claude/skills/code-wiki/README.md#install)). A git repository for `sync`. |
+| grounded | Access to Fable (for `ask` and `verify`) and Sonnet (the verifier). |
 | mvp-builder (Claude Code) | `bash` and `jq`; `npm` or `pytest` for the project it builds. |
 | mvp-builder (Codex) | Python 3.10+, the Codex CLI signed in; macOS/Linux (WSL on Windows). |
 | robin-cloud-onboarding | A Robin-Cloud console account and project; `gh` signed in with admin on the repo. |
