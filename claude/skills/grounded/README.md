@@ -67,8 +67,22 @@ premises the text takes for granted, and tests each against primary evidence:
 The reports land verbatim in `verdicts.md` next to the opinion. Then Fable
 re-judges every refutation by opening the cited evidence itself — accepting,
 rejecting with a reason, or handing it to you — and revises `opinion.md` so it
-never stands on a fact that was just removed. The chat reply leads with
-whether the position survived.
+never stands on a fact that was just removed.
+
+If the document changed, a **fresh** verifier checks the revision, and so on
+for up to three rounds. The loop stops when a verifier refutes nothing, when
+the document stops changing, or after the third round. Your session is the
+orchestrator; no extra agent drives it. A refutation that Fable rejected once
+and a second, independent verifier raises again is not re-judged — it is
+escalated to you with both sides, so the loop checks three times rather than
+insists three times. No round's verifier learns what the previous one found:
+markers and the log line are written only after the loop, round reports stay
+in a temp directory outside the repository until then, an earlier run's
+`verdicts.md` is moved aside first, and the verifier is told to read nothing
+under `.grounded/` but the file it was given.
+
+The chat reply leads with whether the position survived, then the rounds and
+what each one changed.
 
 ## Files
 
@@ -76,7 +90,7 @@ whether the position survived.
 .grounded/
 └── 2026-10-06-cron-to-queue/
     ├── opinion.md     the opinion; frontmatter status: draft | verified; ## Log of edits
-    └── verdicts.md    verifier reports verbatim + the author's re-judgement
+    └── verdicts.md    per round: verifier report verbatim + the author's re-judgement
 ```
 
 Commit the folder to keep the record with the decision, or add `.grounded/`
@@ -94,9 +108,14 @@ at a specific file with `--doc=<path>` / `<path>`.
   in hints about what to trust or skip.
 - **Refutations are re-judged, not applied.** The verifier is cheaper and
   can misread; the strongest model opens the citation and decides.
-- **Verification runs once, on the finished document.** Running it on every
-  draft interrupts the discussion and spends the verifier on text that will
-  change.
+- **Verification starts on the finished document, and loops until a fresh
+  verifier finds nothing.** Running it on every draft interrupts the
+  discussion; running it once leaves the revision unchecked. Three rounds is
+  the cap.
+- **A refutation raised twice goes to you, not back to Fable.** Two
+  independent verifiers disagreeing with the author is a signal; letting the
+  author reject it again would be the self-approval the design exists to
+  avoid.
 - **Facts only.** Judgements, predictions and recommendations are not
   verdicts' business. The verifier reports whether the facts under them
   hold; whether the conclusion follows is yours and Fable's.

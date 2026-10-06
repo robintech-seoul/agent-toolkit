@@ -65,6 +65,11 @@ Rules:
   would require changing state, mark the claim UNVERIFIABLE and say why.
 - Stay inside the document's claims. Do not add your own analysis of the
   question, and do not suggest fixes.
+- **The only file under `.grounded/` you may read is the one you were
+  given.** Anything else there — other opinions, any `verdicts.md` — is other
+  people's judgement, not evidence, and reading it would contaminate yours.
+  Keep that directory out of searches (`grep --exclude-dir=.grounded`, skip
+  Glob matches under it); if a search result still comes from it, ignore it.
 
 ## 4. Report
 

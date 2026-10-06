@@ -1,7 +1,7 @@
 {
   "name": "grounded",
   "version": "0.1.0",
-  "description": "Deep opinions from the strongest model, fact-checked by a cheaper one in a separate context. `ask` switches to the top model and writes the opinion as a document you keep discussing; `verify` hands only that document to a read-only Sonnet verifier that extracts the factual claims it rests on and confirms, refutes or marks each one unverifiable with cited evidence — then the top model re-judges every refutation against the cited evidence and revises the document.",
+  "description": "Deep opinions from the strongest model, fact-checked by a cheaper one in a separate context. `ask` switches to the top model and writes the opinion as a document you keep discussing; `verify` hands only that document to a read-only Sonnet verifier that extracts the factual claims it rests on and confirms, refutes or marks each one unverifiable with cited evidence — then Fable re-judges every refutation against the citations, revises the document, and a fresh verifier checks the revision — up to three rounds, with repeat refutations escalated to you.",
   "author": {
     "name": "RobinTech"
   },

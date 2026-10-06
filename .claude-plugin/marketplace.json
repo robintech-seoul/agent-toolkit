@@ -24,7 +24,7 @@
     {
       "name": "grounded",
       "source": "./claude/skills/grounded",
-      "description": "Deep opinions from the strongest model, fact-checked by a cheaper one in a separate context. `ask` switches to Fable and writes the opinion as a document you keep discussing; `verify` hands only that document to a read-only Sonnet verifier that extracts the factual claims it rests on and confirms, refutes or marks each unverifiable with cited evidence — then Fable re-judges every refutation against the citations and revises the document."
+      "description": "Deep opinions from the strongest model, fact-checked by a cheaper one in a separate context. `ask` switches to Fable and writes the opinion as a document you keep discussing; `verify` hands only that document to a read-only Sonnet verifier that extracts the factual claims it rests on and confirms, refutes or marks each unverifiable with cited evidence — then Fable re-judges every refutation against the citations, revises the document, and a fresh verifier checks the revision — up to three rounds, with repeat refutations escalated to you."
     },
     {
       "name": "mvp-builder",
