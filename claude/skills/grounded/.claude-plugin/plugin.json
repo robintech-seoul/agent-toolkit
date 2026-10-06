@@ -1,0 +1,17 @@
+{
+  "name": "grounded",
+  "version": "0.1.0",
+  "description": "Deep opinions from the strongest model, fact-checked by a cheaper one in a separate context. `ask` switches to the top model and writes the opinion as a document you keep discussing; `verify` hands only that document to a read-only Sonnet verifier that extracts the factual claims it rests on and confirms, refutes or marks each one unverifiable with cited evidence — then the top model re-judges every refutation against the cited evidence and revises the document.",
+  "author": {
+    "name": "RobinTech"
+  },
+  "keywords": [
+    "fact-check",
+    "verification",
+    "second-opinion",
+    "deep-reasoning",
+    "subagent",
+    "context-isolation",
+    "model-routing"
+  ]
+}
